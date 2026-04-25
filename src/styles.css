@@ -100,6 +100,15 @@ body {
   padding: 22px;
 }
 
+.mobile-nav-header,
+.mobile-menu-backdrop {
+  display: none;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
 .kpis {
   display: grid;
   gap: 12px;
@@ -1888,13 +1897,58 @@ td.action-col {
   .layout {
     grid-template-columns: 1fr;
   }
-  .sidebar {
-    border-right: 0;
+  .mobile-nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 10px 12px;
     border-bottom: 1px solid var(--border);
-    position: static;
-    height: auto;
-    min-height: 0;
-    overflow: visible;
+    background: var(--bg);
+  }
+  .mobile-nav-brand {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .mobile-menu-toggle {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .mobile-menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .sidebar {
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 45;
+    width: min(82vw, 320px);
+    height: 100vh;
+    min-height: 100vh;
+    transform: translateX(-102%);
+    transition: transform 180ms ease;
+    overflow-y: auto;
+  }
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+  .content {
+    padding: 16px 12px;
+    padding-bottom: 86px;
   }
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1996,6 +2050,47 @@ td.action-col {
   }
 }
 
+@media (max-width: 960px) {
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 46;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    border-top: 1px solid var(--border);
+    background: #111114;
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom, 0px));
+  }
+  .mobile-bottom-nav button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 10px;
+    min-height: 54px;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+  .mobile-bottom-nav button span {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+  }
+  .mobile-bottom-nav button.active {
+    color: var(--text);
+    background: rgba(86, 86, 95, 0.24);
+  }
+}
+
 @media (max-width: 700px) {
   .new-trade-grid {
     grid-template-columns: 1fr;
@@ -2004,6 +2099,45 @@ td.action-col {
   .card-span-1 {
     grid-column: span 1;
   }
+  .content {
+    padding: 12px 10px;
+    padding-bottom: 86px;
+  }
+  .card {
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .page-header-actions,
+  .trades-header-actions {
+    width: 100%;
+  }
+  .page-header-actions .secondary,
+  .page-header-actions .primary,
+  .trades-header-actions .secondary,
+  .trades-header-actions .primary {
+    min-height: 36px;
+  }
+  .card table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  th,
+  td {
+    font-size: 13px;
+    padding: 8px 6px;
+  }
+  .sidebar .brand {
+    margin-bottom: 12px;
+  }
+  .sidebar .menu button {
+    padding: 11px 10px;
+  }
+}
+
+[data-theme="light"] .mobile-bottom-nav {
+  background: #ececf0;
 }
 
 @media (max-width: 760px) {

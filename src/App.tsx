@@ -60,6 +60,12 @@ export default function App() {
   const [analyticsTab, setAnalyticsTab] = useState<"overview" | "timing" | "assets">("overview");
   const [dashboardNow, setDashboardNow] = useState(() => new Date());
   const [assetMeta, setAssetMeta] = useState<AssetMeta[]>(() => loadAssetMetaFromStorage());
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleViewChange = (nextView: View) => {
+    setView(nextView);
+    setMobileMenuOpen(false);
+  };
 
   const makeDefaultTradeForm = () =>
     defaultForm({
@@ -671,7 +677,16 @@ export default function App() {
 
   return (
     <div className="layout">
-      <SidebarNav view={view} onViewChange={setView} theme={theme} onThemeChange={setTheme} language={appSettings.language} />
+      <SidebarNav
+        view={view}
+        onViewChange={handleViewChange}
+        theme={theme}
+        onThemeChange={setTheme}
+        language={appSettings.language}
+        mobileMenuOpen={mobileMenuOpen}
+        onToggleMobileMenu={() => setMobileMenuOpen((current) => !current)}
+        onCloseMobileMenu={() => setMobileMenuOpen(false)}
+      />
       <main className="content">
         {view === "dashboard" && (
           <DashboardView
