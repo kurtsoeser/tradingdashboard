@@ -157,6 +157,10 @@ function parseTradeRows(rows: Row[]): Trade[] {
       const sellDate = verkaufDatum && verkaufDatum !== "-" ? verkaufDatum : undefined;
 
       const kaufStr = pick(row, "kaufpreis", "kaufbetrag", "kauf €", "kauf_eur", "einkauf");
+      const kaufStueckpreis = parseOptionalMoney(pick(row, "kaufstueckpreis", "kauf_stueckpreis", "stückpreis_kauf", "buy_unit_price"));
+      const kaufTransaktionManuell = parseOptionalMoney(pick(row, "kauftransaktionmanuell", "kauf_transaktion_manuell", "manual_buy_transaction"));
+      const kaufGebuehren = parseOptionalMoney(pick(row, "kaufgebuehren", "kauf_gebuehren", "gebuehren_kauf", "buy_fees"));
+      const kaufPreisManuell = parseOptionalMoney(pick(row, "kaufpreismanuell", "kaufpreis_manuell", "manual_buy_total"));
       const verkaufStr = pick(
         row,
         "verkaufpreis",
@@ -166,6 +170,10 @@ function parseTradeRows(rows: Row[]): Trade[] {
         "auszahlung"
       );
       const gewinnStr = pick(row, "gewinn", "pnl", "profit", "gewinn/verlust");
+      const verkaufStueckpreis = parseOptionalMoney(pick(row, "verkaufstueckpreis", "verkauf_stueckpreis", "stückpreis_verkauf", "sell_unit_price"));
+      const verkaufTransaktionManuell = parseOptionalMoney(pick(row, "verkauftransaktionmanuell", "verkauf_transaktion_manuell", "manual_sell_transaction"));
+      const verkaufSteuern = parseOptionalMoney(pick(row, "verkaufsteuern", "verkauf_steuern", "steuern", "taxes"));
+      const verkaufGebuehren = parseOptionalMoney(pick(row, "verkaufgebuehren", "verkauf_gebuehren", "gebuehren_verkauf", "sell_fees"));
 
       const sellPriceRaw = parseOptionalMoney(verkaufStr);
       const gewinnRaw = parseOptionalMoney(gewinnStr);
@@ -184,8 +192,16 @@ function parseTradeRows(rows: Row[]): Trade[] {
         kaufzeitpunkt: pick(row, "kaufzeitpunkt", "kaufdatum", "einstieg") ?? "",
         kaufPreis: parseMoney(kaufStr),
         stueck: parseStueck(pick(row, "stueck", "stück", "menge", "qty", "quantity")),
+        kaufStueckpreis,
+        kaufTransaktionManuell,
+        kaufGebuehren,
+        kaufPreisManuell,
         verkaufszeitpunkt: sellDate,
         verkaufPreis: sellPrice,
+        verkaufStueckpreis,
+        verkaufTransaktionManuell,
+        verkaufSteuern,
+        verkaufGebuehren,
         gewinn,
         status
       };

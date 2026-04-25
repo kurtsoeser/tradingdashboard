@@ -11,6 +11,8 @@ export interface AppSettings {
   compactMode: boolean;
   confirmBeforeDelete: boolean;
   showMarketPulse: boolean;
+  defaultBuyFees: number;
+  defaultSellFees: number;
   weekStartsOn: "monday" | "sunday";
   financeService: "google" | "yahoo" | "tradingview" | "investing";
 }
@@ -26,6 +28,8 @@ export const defaultAppSettings: AppSettings = {
   compactMode: false,
   confirmBeforeDelete: true,
   showMarketPulse: true,
+  defaultBuyFees: 1,
+  defaultSellFees: 1,
   weekStartsOn: "monday",
   financeService: "google"
 };

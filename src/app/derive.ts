@@ -97,10 +97,14 @@ export function buildAnalyticsData(trades: Trade[]) {
   const totalPL = plValues.reduce((sum, value) => sum + value, 0);
   const totalBuy = closed.reduce((sum, trade) => sum + (trade.kaufPreis ?? 0), 0);
   const totalSell = closed.reduce((sum, trade) => sum + (trade.verkaufPreis ?? 0), 0);
+  const totalBuyFees = closed.reduce((sum, trade) => sum + (trade.kaufGebuehren ?? 0), 0);
+  const totalSellFees = closed.reduce((sum, trade) => sum + (trade.verkaufGebuehren ?? 0), 0);
+  const totalTaxes = closed.reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
+  const totalFees = totalBuyFees + totalSellFees;
   const avgGain = winners.length ? winners.reduce((s, t) => s + getTradeRealizedPL(t), 0) / winners.length : 0;
   const avgLoss = losers.length ? losers.reduce((s, t) => s + getTradeRealizedPL(t), 0) / losers.length : 0;
   const profitableMonths = new Set<string>();
-  const monthBuckets = new Map<string, { pl: number; trades: number; wins: number }>();
+  const monthBuckets = new Map<string, { pl: number; trades: number; wins: number; costs: number }>();
   const weekday = new Map<number, number>();
   const hour = new Map<number, number>();
   const sizeBuckets = new Map<string, number>();
@@ -124,10 +128,11 @@ export function buildAnalyticsData(trades: Trade[]) {
     if (date) {
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      const m = monthBuckets.get(monthKey) ?? { pl: 0, trades: 0, wins: 0 };
+      const m = monthBuckets.get(monthKey) ?? { pl: 0, trades: 0, wins: 0, costs: 0 };
       m.pl += pl;
       m.trades += 1;
       if (pl > 0) m.wins += 1;
+      m.costs += (trade.kaufGebuehren ?? 0) + (trade.verkaufGebuehren ?? 0) + (trade.verkaufSteuern ?? 0);
       monthBuckets.set(monthKey, m);
       tradingDays.add(dayKey);
       if (pl > 0) profitableMonths.add(monthKey);
@@ -195,6 +200,11 @@ export function buildAnalyticsData(trades: Trade[]) {
     return { ...m, cumulative };
   });
 
+  const monthCostChart = monthSeries.map((m) => ({
+    month: m.month,
+    costs: m.costs
+  }));
+
   const topAsset = [...assetPerf.entries()].sort((a, b) => b[1].pl - a[1].pl)[0];
   const flopAsset = [...assetPerf.entries()].sort((a, b) => a[1].pl - b[1].pl)[0];
   const bestMonth = monthChart.reduce((best, cur) => (cur.pl > (best?.pl ?? -Infinity) ? cur : best), null as null | (typeof monthChart)[number]);
@@ -224,6 +234,14 @@ export function buildAnalyticsData(trades: Trade[]) {
     })(),
     totalBuy,
     totalSell,
+    totalBuyFees,
+    totalSellFees,
+    totalFees,
+    totalTaxes,
+    feesToBuyPct: totalBuy > 0 ? (totalFees / totalBuy) * 100 : 0,
+    taxesToSellPct: totalSell > 0 ? (totalTaxes / totalSell) * 100 : 0,
+    avgFeesPerTrade: closed.length > 0 ? totalFees / closed.length : 0,
+    avgTaxesPerTrade: closed.length > 0 ? totalTaxes / closed.length : 0,
     totalPL,
     avgPosition: totalBuy / (closed.length || 1),
     minPosition: Math.min(...closed.map((t) => t.kaufPreis ?? 0)),
@@ -243,6 +261,7 @@ export function buildAnalyticsData(trades: Trade[]) {
     profitableMonths: profitableMonths.size,
     monthCount: monthChart.length,
     monthChart,
+    monthCostChart,
     topAsset,
     flopAsset,
     bestMonth,

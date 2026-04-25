@@ -212,12 +212,29 @@ export function TradesView(props: TradesViewProps) {
         <div className="trades-controls-main">
           {props.trades.length === 0 ? (
             <div className="card">
-              <h3>Import Anleitung</h3>
+              <h3>{props.language === "en" ? "Import Guide" : "Import Anleitung"}</h3>
               <p>
-                Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: <code>tradeId, name, typ, basiswert, kaufzeitpunkt, kaufPreis, stueck, verkaufszeitpunkt, verkaufPreis, gewinn, status</code>.
+                {props.language === "en"
+                  ? "Download a template and fill the columns as specified:"
+                  : "Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus:"}{" "}
+                <code>
+                  tradeId, name, typ, basiswert, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell,
+                  verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreis, gewinn, status
+                </code>
+                .
               </p>
               <p>
-                Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
+                {props.language === "en" ? (
+                  <>
+                    Formats: <strong>CSV</strong> or <strong>Excel (.xlsx/.xls)</strong>. For open trades, leave <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code>{" "}
+                    and <code>gewinn</code> empty and set <code>status</code> to <code>Offen</code>.
+                  </>
+                ) : (
+                  <>
+                    Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und{" "}
+                    <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
+                  </>
+                )}
               </p>
             </div>
           ) : null}

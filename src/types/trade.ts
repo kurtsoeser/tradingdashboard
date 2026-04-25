@@ -20,8 +20,16 @@ export interface Trade {
   kaufzeitpunkt: string;
   kaufPreis: number;
   stueck?: number;
+  kaufStueckpreis?: number;
+  kaufTransaktionManuell?: number;
+  kaufGebuehren?: number;
+  kaufPreisManuell?: number;
   verkaufszeitpunkt?: string;
   verkaufPreis?: number;
+  verkaufStueckpreis?: number;
+  verkaufTransaktionManuell?: number;
+  verkaufSteuern?: number;
+  verkaufGebuehren?: number;
   gewinn?: number;
   status: TradeStatus;
 }

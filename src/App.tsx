@@ -5,7 +5,7 @@ import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
 import { saveTradesToStorage } from "./lib/storage";
 import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
 import { loadAssetMetaFromStorage, saveAssetMetaToStorage } from "./lib/assetsStorage";
-import { daysBetween, getCalendarMonthLabel, getNowLocalDateTimeValue, getWeekdayNames, parseStoredDateTime, setDateDisplayConfig, toDisplayDateTime, toIsoMonth, toLocalInputValue } from "./app/date";
+import { daysBetween, getCalendarMonthLabel, getNowLocalDateTimeValue, getWeekdayNames, parseStoredDateTime, setDateDisplayConfig, toDisplayDateTime, toLocalInputValue } from "./app/date";
 import { csvEscape, readInitialTrades } from "./app/helpers";
 import { buildAnalyticsData, buildAssetRows, buildDashboardMonthlyStats, buildDashboardTopFlop } from "./app/derive";
 import { type AssetMeta, type AssetSortField, type DashboardOpenSortField, defaultForm, type NewTradeForm, type SortDirection, type TradesSortField, type View } from "./app/types";
@@ -29,7 +29,12 @@ export default function App() {
   });
   const [view, setView] = useState<View>(() => readStoredAppSettings().defaultStartView);
   const [trades, setTrades] = useState<Trade[]>(() => readInitialTrades());
-  const [form, setForm] = useState<NewTradeForm>(defaultForm());
+  const [form, setForm] = useState<NewTradeForm>(() =>
+    defaultForm({
+      kaufGebuehren: `${readStoredAppSettings().defaultBuyFees ?? defaultAppSettings.defaultBuyFees}`,
+      verkaufGebuehren: `${readStoredAppSettings().defaultSellFees ?? defaultAppSettings.defaultSellFees}`
+    })
+  );
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
@@ -55,6 +60,12 @@ export default function App() {
   const [analyticsTab, setAnalyticsTab] = useState<"overview" | "timing" | "assets">("overview");
   const [dashboardNow, setDashboardNow] = useState(() => new Date());
   const [assetMeta, setAssetMeta] = useState<AssetMeta[]>(() => loadAssetMetaFromStorage());
+
+  const makeDefaultTradeForm = () =>
+    defaultForm({
+      kaufGebuehren: `${appSettings.defaultBuyFees ?? 0}`,
+      verkaufGebuehren: `${appSettings.defaultSellFees ?? 0}`
+    });
 
   const kpis = useMemo(() => getKpis(trades), [trades]);
   useEffect(() => {
@@ -300,10 +311,31 @@ export default function App() {
     saveTradesToStorage(rows);
   };
 
-  const templateHeader = ["tradeId", "name", "typ", "basiswert", "notiz", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
+  const templateHeader = [
+    "tradeId",
+    "name",
+    "typ",
+    "basiswert",
+    "notiz",
+    "kaufzeitpunkt",
+    "stueck",
+    "kaufStueckpreis",
+    "kaufTransaktionManuell",
+    "kaufGebuehren",
+    "kaufPreis",
+    "kaufPreisManuell",
+    "verkaufszeitpunkt",
+    "verkaufStueckpreis",
+    "verkaufTransaktionManuell",
+    "verkaufSteuern",
+    "verkaufGebuehren",
+    "verkaufPreis",
+    "gewinn",
+    "status"
+  ];
   const templateRows: Array<Array<string | number>> = [
-    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 1500, 10, "2026-04-10 15:45", 1675, 175, "Geschlossen"],
-    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 900, 0.025, "", "", "", "Offen"]
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, 1649.5, 147, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "Offen"]
   ];
 
   const downloadImportTemplateCsv = () => {
@@ -403,16 +435,29 @@ export default function App() {
     XLSX.writeFile(workbook, "basiswerte-export.xlsx");
   };
 
-  const kaufPreis = Number.parseFloat(form.kaufPreis) || 0;
-  const verkaufPreis = Number.parseFloat(form.verkaufPreis) || 0;
-  const statusClosed = form.status === "Geschlossen";
+  const stueck = Number.parseFloat(form.stueck) || 0;
+  const kaufStueckpreis = Number.parseFloat(form.kaufStueckpreis) || 0;
+  const kaufTransaktionManuell = Number.parseFloat(form.kaufTransaktionManuell);
+  const kaufGebuehren = Number.parseFloat(form.kaufGebuehren) || 0;
+  const kaufPreisAutomatisch = stueck > 0 ? stueck * kaufStueckpreis + kaufGebuehren : 0;
+  const kaufPreisManuell = Number.parseFloat(form.kaufPreisManuell);
+  const verkaufStueckpreis = Number.parseFloat(form.verkaufStueckpreis) || 0;
+  const verkaufTransaktionManuell = Number.parseFloat(form.verkaufTransaktionManuell);
+  const verkaufGebuehren = Number.parseFloat(form.verkaufGebuehren) || 0;
+  const kaufTransaktion =
+    form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : stueck > 0 ? stueck * kaufStueckpreis : 0;
+  const verkaufTransaktion =
+    form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : stueck > 0 ? stueck * verkaufStueckpreis : 0;
+  const verkaufSteuern = form.verkaufSteuern.trim() === "" ? verkaufTransaktion * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
+  const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
+  const verkaufPreis = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
+  const statusClosed = !!form.verkaufszeitpunkt;
   const gewinn = statusClosed ? verkaufPreis - kaufPreis : 0;
   const rendite = kaufPreis > 0 ? (gewinn / kaufPreis) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
-  const monat = statusClosed ? toIsoMonth(form.verkaufszeitpunkt) : toIsoMonth(form.kaufzeitpunkt);
 
   const saveNewTrade = () => {
-    if (!form.name.trim() || !form.basiswert.trim() || !form.kaufzeitpunkt || kaufPreis <= 0) return;
+    if (!form.name.trim() || !form.basiswert.trim() || !form.kaufzeitpunkt || stueck <= 0 || kaufStueckpreis <= 0 || kaufPreis <= 0) return;
     const next: Trade = {
       id: editingTradeId ?? `trade-${Date.now()}`,
       name: form.name.trim(),
@@ -421,18 +466,32 @@ export default function App() {
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
       kaufPreis,
-      stueck: form.stueck ? Number.parseFloat(form.stueck) : undefined,
+      stueck: stueck > 0 ? stueck : undefined,
+      kaufStueckpreis: kaufStueckpreis > 0 ? kaufStueckpreis : undefined,
+      kaufTransaktionManuell: form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : undefined,
+      kaufGebuehren: kaufGebuehren,
+      kaufPreisManuell: form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : undefined,
       verkaufszeitpunkt: statusClosed ? toDisplayDateTime(form.verkaufszeitpunkt) : undefined,
       verkaufPreis: statusClosed ? verkaufPreis : undefined,
+      verkaufStueckpreis: statusClosed && verkaufStueckpreis > 0 ? verkaufStueckpreis : undefined,
+      verkaufTransaktionManuell: statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : undefined,
+      verkaufSteuern: statusClosed ? verkaufSteuern : undefined,
+      verkaufGebuehren: statusClosed ? verkaufGebuehren : undefined,
       gewinn: statusClosed ? gewinn : undefined,
-      status: form.status
+      status: statusClosed ? "Geschlossen" : "Offen"
     };
     const updated = editingTradeId ? trades.map((trade) => (trade.id === editingTradeId ? next : trade)) : [next, ...trades];
     setTrades(updated);
     saveTradesToStorage(updated);
-    setForm(defaultForm());
+    setForm(makeDefaultTradeForm());
     setEditingTradeId(null);
     setView("trades");
+  };
+
+  const startNewTrade = () => {
+    setEditingTradeId(null);
+    setForm(makeDefaultTradeForm());
+    setView("newTrade");
   };
 
   const toggleSort = (field: TradesSortField) => {
@@ -442,7 +501,28 @@ export default function App() {
   };
   const sortMarker = (field: TradesSortField) => (sortField === field ? (sortDirection === "asc" ? " ↑" : " ↓") : " ↕");
   const exportTradesCsvForExcel = () => {
-    const header = ["tradeId", "name", "typ", "basiswert", "notiz", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
+    const header = [
+      "tradeId",
+      "name",
+      "typ",
+      "basiswert",
+      "notiz",
+      "kaufzeitpunkt",
+      "stueck",
+      "kaufStueckpreis",
+      "kaufTransaktionManuell",
+      "kaufGebuehren",
+      "kaufPreis",
+      "kaufPreisManuell",
+      "verkaufszeitpunkt",
+      "verkaufStueckpreis",
+      "verkaufTransaktionManuell",
+      "verkaufSteuern",
+      "verkaufGebuehren",
+      "verkaufPreis",
+      "gewinn",
+      "status"
+    ];
     const rows = trades.map((trade) => [
       trade.id,
       trade.name,
@@ -450,9 +530,17 @@ export default function App() {
       trade.basiswert,
       trade.notiz,
       trade.kaufzeitpunkt,
-      trade.kaufPreis,
       trade.stueck,
+      trade.kaufStueckpreis,
+      trade.kaufTransaktionManuell,
+      trade.kaufGebuehren,
+      trade.kaufPreis,
+      trade.kaufPreisManuell,
       trade.verkaufszeitpunkt,
+      trade.verkaufStueckpreis,
+      trade.verkaufTransaktionManuell,
+      trade.verkaufSteuern,
+      trade.verkaufGebuehren,
       trade.verkaufPreis,
       trade.gewinn,
       trade.status
@@ -487,10 +575,11 @@ export default function App() {
     saveTradesToStorage(updated);
     if (editingTradeId === id) {
       setEditingTradeId(null);
-      setForm(defaultForm());
+      setForm(makeDefaultTradeForm());
     }
   };
   const editTrade = (trade: Trade) => {
+    const qty = trade.stueck && trade.stueck > 0 ? trade.stueck : 1;
     setEditingTradeId(trade.id);
     setForm({
       name: trade.name,
@@ -498,11 +587,16 @@ export default function App() {
       basiswert: trade.basiswert,
       notiz: trade.notiz ?? "",
       kaufzeitpunkt: toLocalInputValue(trade.kaufzeitpunkt),
-      kaufPreis: `${trade.kaufPreis ?? 0}`,
-      stueck: trade.stueck !== undefined ? `${trade.stueck}` : "",
-      status: isTradeClosed(trade) ? "Geschlossen" : "Offen",
+      stueck: `${qty}`,
+      kaufStueckpreis: trade.kaufStueckpreis !== undefined ? `${trade.kaufStueckpreis}` : `${(trade.kaufPreis ?? 0) / qty}`,
+      kaufTransaktionManuell: trade.kaufTransaktionManuell !== undefined ? `${trade.kaufTransaktionManuell}` : "",
+      kaufGebuehren: `${trade.kaufGebuehren ?? appSettings.defaultBuyFees ?? 0}`,
+      kaufPreisManuell: trade.kaufPreisManuell !== undefined ? `${trade.kaufPreisManuell}` : "",
       verkaufszeitpunkt: toLocalInputValue(trade.verkaufszeitpunkt),
-      verkaufPreis: trade.verkaufPreis !== undefined ? `${trade.verkaufPreis}` : ""
+      verkaufStueckpreis: trade.verkaufStueckpreis !== undefined ? `${trade.verkaufStueckpreis}` : trade.verkaufPreis !== undefined ? `${trade.verkaufPreis / qty}` : "",
+      verkaufTransaktionManuell: trade.verkaufTransaktionManuell !== undefined ? `${trade.verkaufTransaktionManuell}` : "",
+      verkaufSteuern: `${trade.verkaufSteuern ?? ""}`,
+      verkaufGebuehren: `${trade.verkaufGebuehren ?? appSettings.defaultSellFees ?? 0}`
     });
     setView("newTrade");
   };
@@ -619,7 +713,7 @@ export default function App() {
             onDownloadImportTemplateExcel={downloadImportTemplateExcel}
             onExportTradesCsvForExcel={exportTradesCsvForExcel}
             onExportTradesJsonBackup={exportTradesJsonBackup}
-            onGoToNewTrade={() => setView("newTrade")}
+            onGoToNewTrade={startNewTrade}
             onEditTrade={editTrade}
             onDeleteTrade={deleteTrade}
             calendarMonthLabel={calendarMonthLabel}
@@ -647,15 +741,16 @@ export default function App() {
         {view === "newTrade" && (
           <NewTradeView
             editingTradeId={editingTradeId}
+            trades={trades}
             form={form}
             setForm={setForm}
             statusClosed={statusClosed}
             gewinn={gewinn}
             rendite={rendite}
             haltedauer={haltedauer}
-            monat={monat}
             onSaveNewTrade={saveNewTrade}
             onSetViewTrades={() => setView("trades")}
+            onResetForm={() => setForm(makeDefaultTradeForm())}
             onCancelEdit={() => setEditingTradeId(null)}
           />
         )}
@@ -675,7 +770,7 @@ export default function App() {
             onDownloadAssetTemplateExcel={downloadAssetTemplateExcel}
             onExportAssetsCsv={exportAssetsCsv}
             onExportAssetsExcel={exportAssetsExcel}
-            onGoToNewTrade={() => setView("newTrade")}
+            onGoToNewTrade={startNewTrade}
             financeService={appSettings.financeService}
           />
         )}

@@ -59,6 +59,26 @@ export function SettingsView({ settings, onSettingsChange, onApplyTheme, current
                 <option value="en">English</option>
               </select>
             </label>
+            <label>
+              {settings.language === "en" ? "Fees (default) buy" : "Gebühren (Standard) Kauf"}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={settings.defaultBuyFees}
+                onChange={(e) => update("defaultBuyFees", Number.parseFloat(e.target.value) || 0)}
+              />
+            </label>
+            <label>
+              {settings.language === "en" ? "Fees (default) sell" : "Gebühren (Standard) Verkauf"}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={settings.defaultSellFees}
+                onChange={(e) => update("defaultSellFees", Number.parseFloat(e.target.value) || 0)}
+              />
+            </label>
           </div>
         </div>
 

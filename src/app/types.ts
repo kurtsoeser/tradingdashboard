@@ -36,24 +36,35 @@ export interface NewTradeForm {
   basiswert: string;
   notiz: string;
   kaufzeitpunkt: string;
-  kaufPreis: string;
   stueck: string;
-  status: Trade["status"];
+  kaufStueckpreis: string;
+  kaufTransaktionManuell: string;
+  kaufGebuehren: string;
+  kaufPreisManuell: string;
   verkaufszeitpunkt: string;
-  verkaufPreis: string;
+  verkaufStueckpreis: string;
+  verkaufTransaktionManuell: string;
+  verkaufSteuern: string;
+  verkaufGebuehren: string;
 }
 
-export function defaultForm(): NewTradeForm {
+export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
   return {
     name: "",
     typ: "Long",
     basiswert: "",
     notiz: "",
     kaufzeitpunkt: "",
-    kaufPreis: "",
     stueck: "",
-    status: "Offen",
+    kaufStueckpreis: "",
+    kaufTransaktionManuell: "",
+    kaufGebuehren: "",
+    kaufPreisManuell: "",
     verkaufszeitpunkt: "",
-    verkaufPreis: ""
+    verkaufStueckpreis: "",
+    verkaufTransaktionManuell: "",
+    verkaufSteuern: "",
+    verkaufGebuehren: "",
+    ...overrides
   };
 }

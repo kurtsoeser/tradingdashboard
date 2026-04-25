@@ -175,6 +175,47 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
 
           <div className="card analytics-grid-8">
             <h3>
+              <ShieldAlert size={14} />
+              Kosten, Gebühren & Steuern
+            </h3>
+            <div className="analytics-mini-grid analytics-eight">
+              <div>
+                <span>Σ Gebühren Kauf</span>
+                <strong>{money(analyticsData.totalBuyFees)}</strong>
+              </div>
+              <div>
+                <span>Σ Gebühren Verkauf</span>
+                <strong>{money(analyticsData.totalSellFees)}</strong>
+              </div>
+              <div>
+                <span>Σ Gebühren gesamt</span>
+                <strong>{money(analyticsData.totalFees)}</strong>
+              </div>
+              <div>
+                <span>Σ Steuern</span>
+                <strong>{money(analyticsData.totalTaxes)}</strong>
+              </div>
+              <div>
+                <span>Gebührenquote auf Kauf</span>
+                <strong>{analyticsData.feesToBuyPct.toFixed(2)}%</strong>
+              </div>
+              <div>
+                <span>Steuerquote auf Verkauf</span>
+                <strong>{analyticsData.taxesToSellPct.toFixed(2)}%</strong>
+              </div>
+              <div>
+                <span>Ø Gebühren / Trade</span>
+                <strong>{money(analyticsData.avgFeesPerTrade)}</strong>
+              </div>
+              <div>
+                <span>Ø Steuern / Trade</span>
+                <strong>{money(analyticsData.avgTaxesPerTrade)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="card analytics-grid-8">
+            <h3>
               <LineChart size={14} />
               Gewinn & Verlust Statistiken
             </h3>
@@ -284,6 +325,20 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
               Performance nach Uhrzeit (Kauf)
             </h3>
             <SimpleBarChart mode="pl" data={analyticsData.hourData.map((d) => ({ label: d.label, value: d.value }))} />
+          </div>
+
+          <div className="card chart-card">
+            <h3>
+              <ShieldAlert size={14} />
+              Gebühren + Steuern pro Monat
+            </h3>
+            <SimpleBarChart
+              mode="pl"
+              data={analyticsData.monthCostChart.map((m) => ({
+                label: m.month.slice(5),
+                value: m.costs
+              }))}
+            />
           </div>
 
           <div className="card analytics-grid-8">

@@ -198,19 +198,52 @@ button.primary {
   margin-top: 14px;
   display: grid;
   gap: 14px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.card-span-3 {
+  grid-column: span 3;
+}
+
+.card-span-1 {
+  grid-column: span 1;
 }
 
 .form-card h3 {
-  margin: 0 0 10px;
+  margin: 0;
 }
 
 .form-title-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   align-items: center;
   margin-bottom: 10px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.card-title-icon {
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.card-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verkauf-toggle-row {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ghost-btn {
@@ -222,17 +255,125 @@ button.primary {
   padding: 6px 10px;
 }
 
+.ghost-btn-compact {
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.15;
+  min-height: 30px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px 12px;
 }
 
+.trade-row-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-span-2 {
+  grid-column: span 2;
+}
+
+.field-span-full {
+  grid-column: 1 / -1;
+}
+
+.field-spacer {
+  min-height: 1px;
+}
+
+.field-align-right {
+  grid-column: 3;
+}
+
+.field-align-right .field-title {
+  text-align: left;
+}
+
+.calc-right-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.calc-right-row .field-title {
+  margin: 0;
+  text-align: left;
+}
+
+.calc-right-row input {
+  grid-column: 2;
+}
+
+.calc-right-row input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #151518;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+
+.formula-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.formula-operator {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+}
+
+.calc-separator {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+  margin-top: 2px;
+}
+
+.calc-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.calc-card .trade-row-grid {
+  align-content: start;
+}
+
+.calc-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.calc-footer .calc-right-row {
+  margin-top: 6px;
+}
+
+.tax-row {
+  margin-bottom: 6px;
+}
+
 .form-grid label {
   display: grid;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
+}
+
+.field-title {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .form-grid input,
@@ -264,8 +405,7 @@ button.primary {
 }
 
 .notes-card {
-  margin-top: 14px;
-  width: min(50%, 100%);
+  width: 100%;
 }
 
 .notes-label {
@@ -277,6 +417,141 @@ button.primary {
 
 .notes-label textarea {
   min-height: 120px;
+}
+
+.asset-history-card {
+  display: grid;
+  gap: 12px;
+}
+
+.asset-history-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.asset-history-title-row h3 {
+  margin: 0;
+}
+
+.asset-history-subtitle span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.asset-history-kpis {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.asset-history-kpis div {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.asset-history-kpis small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.asset-history-kpis strong {
+  font-size: 14px;
+}
+
+.asset-history-chart-block {
+  display: grid;
+  gap: 8px;
+}
+
+.asset-history-chart-block h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.asset-history-bars {
+  display: grid;
+  gap: 6px;
+}
+
+.asset-history-bar-row {
+  display: grid;
+  grid-template-columns: 38px 1fr 72px;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-history-bar-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.asset-history-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.asset-history-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.asset-history-bar-fill.is-positive {
+  background: #1ba650;
+}
+
+.asset-history-bar-fill.is-negative {
+  background: #d44f4f;
+}
+
+.asset-history-bar-value {
+  font-size: 11px;
+  text-align: right;
+}
+
+.asset-history-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.result-card {
+  --result-tint-strength: 0;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.result-card.is-win {
+  background: linear-gradient(
+    180deg,
+    rgba(27, 166, 80, calc(0.04 + 0.12 * var(--result-tint-strength))) 0%,
+    rgba(27, 166, 80, calc(0.02 + 0.08 * var(--result-tint-strength))) 100%
+  );
+  border-color: rgba(27, 166, 80, calc(0.22 + 0.45 * var(--result-tint-strength)));
+}
+
+.result-card.is-loss {
+  background: linear-gradient(
+    180deg,
+    rgba(212, 79, 79, calc(0.04 + 0.12 * var(--result-tint-strength))) 0%,
+    rgba(212, 79, 79, calc(0.02 + 0.08 * var(--result-tint-strength))) 100%
+  );
+  border-color: rgba(212, 79, 79, calc(0.22 + 0.45 * var(--result-tint-strength)));
+}
+
+.result-card.is-neutral {
+  background: transparent;
+  border-color: var(--border);
 }
 
 .date-input-row {
@@ -1145,6 +1420,7 @@ button.dashboard-link-card:hover {
 [data-theme="light"] .form-grid input,
 [data-theme="light"] .form-grid select,
 [data-theme="light"] .form-grid textarea,
+[data-theme="light"] .calc-right-row input,
 [data-theme="light"] .trades-filters-grid input,
 [data-theme="light"] .trades-filters-grid select,
 [data-theme="light"] .trades-single-search input,
@@ -1168,6 +1444,24 @@ button.dashboard-link-card:hover {
 
 [data-theme="light"] .donut-inner {
   background: var(--bg);
+}
+
+[data-theme="light"] .result-card.is-win {
+  background: linear-gradient(
+    180deg,
+    rgba(31, 155, 85, calc(0.035 + 0.09 * var(--result-tint-strength))) 0%,
+    rgba(31, 155, 85, calc(0.015 + 0.06 * var(--result-tint-strength))) 100%
+  );
+  border-color: rgba(31, 155, 85, calc(0.16 + 0.3 * var(--result-tint-strength)));
+}
+
+[data-theme="light"] .result-card.is-loss {
+  background: linear-gradient(
+    180deg,
+    rgba(213, 61, 82, calc(0.035 + 0.09 * var(--result-tint-strength))) 0%,
+    rgba(213, 61, 82, calc(0.015 + 0.06 * var(--result-tint-strength))) 100%
+  );
+  border-color: rgba(213, 61, 82, calc(0.16 + 0.3 * var(--result-tint-strength)));
 }
 
 .assets-filters-grid {
@@ -1549,7 +1843,8 @@ td.action-col {
   font-size: 13px;
 }
 
-.settings-form-grid select {
+.settings-form-grid select,
+.settings-form-grid input {
   border: 1px solid var(--border);
   background: #151518;
   color: var(--text);
@@ -1570,7 +1865,8 @@ td.action-col {
   gap: 6px;
 }
 
-[data-theme="light"] .settings-form-grid select {
+[data-theme="light"] .settings-form-grid select,
+[data-theme="light"] .settings-form-grid input {
   background: #fbfbfd;
 }
 
@@ -1604,13 +1900,46 @@ td.action-col {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .new-trade-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .card-span-3 {
+    grid-column: span 2;
+  }
+  .card-span-1 {
+    grid-column: span 1;
   }
   .notes-card {
     width: 100%;
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .trade-row-grid {
+    grid-template-columns: 1fr;
+  }
+  .field-span-2,
+  .field-span-full,
+  .field-align-right {
+    grid-column: span 1;
+  }
+  .formula-row {
+    grid-template-columns: 1fr;
+  }
+  .calc-right-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .calc-right-row input {
+    grid-column: auto;
+  }
+  .formula-operator {
+    display: none;
+  }
+  .field-spacer {
+    display: none;
+  }
+  .asset-history-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .equity-head {
     flex-direction: column;
@@ -1664,6 +1993,16 @@ td.action-col {
   }
   .trades-inline-calendar-head strong {
     min-width: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .new-trade-grid {
+    grid-template-columns: 1fr;
+  }
+  .card-span-3,
+  .card-span-1 {
+    grid-column: span 1;
   }
 }
 
