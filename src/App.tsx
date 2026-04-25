@@ -5,8 +5,7 @@ import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
 import { saveTradesToStorage } from "./lib/storage";
 import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
 import { loadAssetMetaFromStorage, saveAssetMetaToStorage } from "./lib/assetsStorage";
-import { calendarMonthNames } from "./app/constants";
-import { daysBetween, getNowLocalDateTimeValue, parseStoredDateTime, toDisplayDateTime, toIsoMonth, toLocalInputValue } from "./app/date";
+import { daysBetween, getCalendarMonthLabel, getNowLocalDateTimeValue, getWeekdayNames, parseStoredDateTime, setDateDisplayConfig, toDisplayDateTime, toIsoMonth, toLocalInputValue } from "./app/date";
 import { csvEscape, readInitialTrades } from "./app/helpers";
 import { buildAnalyticsData, buildAssetRows, buildDashboardMonthlyStats, buildDashboardTopFlop } from "./app/derive";
 import { type AssetMeta, type AssetSortField, type DashboardOpenSortField, defaultForm, type NewTradeForm, type SortDirection, type TradesSortField, type View } from "./app/types";
@@ -16,14 +15,19 @@ import { TradesView } from "./components/views/TradesView";
 import { NewTradeView } from "./components/views/NewTradeView";
 import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
+import { SettingsView } from "./components/views/SettingsView";
+import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
+import { setMoneyFormat } from "./lib/analytics";
+import { t } from "./app/i18n";
 
 export default function App() {
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const saved = window.localStorage.getItem("theme");
     if (saved === "dark" || saved === "light") return saved;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useState<View>(() => readStoredAppSettings().defaultStartView);
   const [trades, setTrades] = useState<Trade[]>(() => readInitialTrades());
   const [form, setForm] = useState<NewTradeForm>(defaultForm());
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
@@ -61,6 +65,21 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", theme);
     window.localStorage.setItem("theme", theme);
   }, [theme]);
+  useEffect(() => {
+    window.localStorage.setItem("app-settings", JSON.stringify(appSettings));
+  }, [appSettings]);
+  useEffect(() => {
+    const locale = appSettings.numberFormat || getLanguageLocale(appSettings.language);
+    setMoneyFormat(locale, appSettings.currency);
+    setDateDisplayConfig({
+      locale: getLanguageLocale(appSettings.language),
+      timeZone: appSettings.timezone,
+      dateFormat: appSettings.dateFormat
+    });
+  }, [appSettings]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-compact", appSettings.compactMode ? "true" : "false");
+  }, [appSettings.compactMode]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -459,6 +478,10 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
   const deleteTrade = (id: string) => {
+    if (appSettings.confirmBeforeDelete) {
+      const confirmed = window.confirm(appSettings.language === "en" ? "Delete this trade?" : "Diesen Trade wirklich löschen?");
+      if (!confirmed) return;
+    }
     const updated = trades.filter((trade) => trade.id !== id);
     setTrades(updated);
     saveTradesToStorage(updated);
@@ -514,11 +537,13 @@ export default function App() {
   const currentCalendarMonth = calendarMonth.getMonth();
   const firstDayOfCalendarMonth = new Date(currentCalendarYear, currentCalendarMonth, 1);
   const daysInCalendarMonth = new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate();
-  const calendarStartOffset = (firstDayOfCalendarMonth.getDay() + 6) % 7;
+  const weekStartsOnMonday = appSettings.weekStartsOn === "monday";
+  const calendarStartOffset = weekStartsOnMonday ? (firstDayOfCalendarMonth.getDay() + 6) % 7 : firstDayOfCalendarMonth.getDay();
   const calendarCells = Array.from({ length: calendarStartOffset + daysInCalendarMonth }, (_, idx) => idx - calendarStartOffset + 1);
   const calendarRangeMin = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart < calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeStart;
   const calendarRangeMax = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart > calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeEnd;
-  const calendarMonthLabel = `${calendarMonthNames[currentCalendarMonth]} ${currentCalendarYear}`;
+  const calendarMonthLabel = getCalendarMonthLabel(calendarMonth);
+  const calendarWeekdayNames = getWeekdayNames(appSettings.weekStartsOn, appSettings.language);
   const setSingleDayFilter = (dateKey: string) => {
     setRangeFilter("Alle");
     setCalendarRangeStart(dateKey);
@@ -544,7 +569,7 @@ export default function App() {
 
   return (
     <div className="layout">
-      <SidebarNav view={view} onViewChange={setView} theme={theme} onThemeChange={setTheme} />
+      <SidebarNav view={view} onViewChange={setView} theme={theme} onThemeChange={setTheme} language={appSettings.language} />
       <main className="content">
         {view === "dashboard" && (
           <DashboardView
@@ -560,6 +585,9 @@ export default function App() {
             dashboardOpenSortMarker={dashboardOpenSortMarker}
             onEditTrade={editTrade}
             onJumpToAsset={jumpToAsset}
+            exchange={appSettings.exchange}
+            language={appSettings.language}
+            showMarketPulse={appSettings.showMarketPulse}
           />
         )}
         {view === "trades" && (
@@ -612,6 +640,8 @@ export default function App() {
             calendarDragMoved={calendarDragMoved}
             setCalendarDragMoved={setCalendarDragMoved}
             onSetSingleDayFilter={setSingleDayFilter}
+            calendarWeekdayNames={calendarWeekdayNames}
+            language={appSettings.language}
           />
         )}
         {view === "newTrade" && (
@@ -646,6 +676,7 @@ export default function App() {
             onExportAssetsCsv={exportAssetsCsv}
             onExportAssetsExcel={exportAssetsExcel}
             onGoToNewTrade={() => setView("newTrade")}
+            financeService={appSettings.financeService}
           />
         )}
         {view === "analytics" && analyticsData && (
@@ -656,6 +687,9 @@ export default function App() {
             trades={trades}
             onBackToTrades={() => setView("trades")}
           />
+        )}
+        {view === "settings" && (
+          <SettingsView settings={appSettings ?? defaultAppSettings} onSettingsChange={setAppSettings} onApplyTheme={setTheme} currentTheme={theme} t={(key) => t(appSettings.language, key)} />
         )}
       </main>
     </div>

@@ -2,6 +2,7 @@ import { ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Plus, U
 import type { AssetSortField } from "../../app/types";
 import { money } from "../../lib/analytics";
 import type { AssetDisplayRow } from "../../app/types";
+import type { AppSettings } from "../../app/settings";
 import { PageHeader } from "../PageHeader";
 
 interface AssetsViewProps {
@@ -25,6 +26,7 @@ interface AssetsViewProps {
   onExportAssetsCsv: () => void;
   onExportAssetsExcel: () => void;
   onGoToNewTrade: () => void;
+  financeService: AppSettings["financeService"];
 }
 
 export function AssetsView({
@@ -42,13 +44,61 @@ export function AssetsView({
   onDownloadAssetTemplateExcel,
   onExportAssetsCsv,
   onExportAssetsExcel,
-  onGoToNewTrade
+  onGoToNewTrade,
+  financeService
 }: AssetsViewProps) {
-  const toGoogleFinanceUrl = (asset: AssetDisplayRow) => {
-    const ticker = asset.tickerUs?.trim() || asset.tickerXetra?.trim() || asset.name.trim();
-    const query = encodeURIComponent(ticker);
-    return `https://www.google.com/finance/quote/${query}`;
+  const toFinanceUrl = (asset: AssetDisplayRow) => {
+    const tickerUs = asset.tickerUs?.trim();
+    const tickerXetra = asset.tickerXetra?.trim();
+    const fallback = asset.name.trim();
+    switch (financeService) {
+      case "yahoo": {
+        const symbol = tickerUs || tickerXetra || fallback;
+        return `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`;
+      }
+      case "tradingview": {
+        const symbol = tickerUs || tickerXetra || fallback;
+        return `https://www.tradingview.com/symbols/${encodeURIComponent(symbol)}`;
+      }
+      case "investing": {
+        const query = tickerUs || tickerXetra || fallback;
+        return `https://www.investing.com/search/?q=${encodeURIComponent(query)}`;
+      }
+      case "google":
+      default: {
+        const query = tickerUs || tickerXetra || fallback;
+        return `https://www.google.com/finance/quote/${encodeURIComponent(query)}`;
+      }
+    }
   };
+
+  const financeServiceLabel = (() => {
+    switch (financeService) {
+      case "yahoo":
+        return "Yahoo Finance";
+      case "tradingview":
+        return "TradingView";
+      case "investing":
+        return "Investing.com";
+      case "google":
+      default:
+        return "Google Finance";
+    }
+  })();
+
+  const financeOpenLabel = (() => {
+    switch (financeService) {
+      case "yahoo":
+        return "Bei Yahoo öffnen";
+      case "tradingview":
+        return "Bei TradingView öffnen";
+      case "investing":
+        return "Bei Investing öffnen";
+      case "google":
+      default:
+        return "Bei Google öffnen";
+    }
+  })();
 
   return (
     <section className="section">
@@ -200,7 +250,7 @@ export function AssetsView({
               <th onClick={() => onToggleAssetSort("openCapital")} className="sortable">
                 Offenes Kapital{assetSortMarker("openCapital")}
               </th>
-              <th>Google Finance</th>
+              <th>{financeServiceLabel}</th>
               <th>Aktion</th>
             </tr>
           </thead>
@@ -218,9 +268,9 @@ export function AssetsView({
                 <td className={asset.realizedPL >= 0 ? "positive" : "negative"}>{money(asset.realizedPL)}</td>
                 <td>{asset.openCapital > 0 ? money(asset.openCapital) : "-"}</td>
                 <td>
-                  <a className="secondary slim finance-link-btn" href={toGoogleFinanceUrl(asset)} target="_blank" rel="noreferrer">
+                  <a className="secondary slim finance-link-btn" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer">
                     <ExternalLink size={12} />
-                    Öffnen
+                    {financeOpenLabel}
                   </a>
                 </td>
                 <td>

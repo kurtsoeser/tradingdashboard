@@ -1,6 +1,8 @@
 import { Clock3, HandCoins, Layers, LayoutDashboard, TrendingUp } from "lucide-react";
-import { formatDashboardDateTime, formatDateTimeAT, formatMonthLabel } from "../../app/date";
+import { formatDateTimeAT, formatMonthLabel, isMarketOpenNow } from "../../app/date";
+import { t } from "../../app/i18n";
 import { money } from "../../lib/analytics";
+import type { AppSettings } from "../../app/settings";
 import type { Trade } from "../../types/trade";
 import { EquityCurve } from "../EquityCurve";
 import { PageHeader } from "../PageHeader";
@@ -31,6 +33,9 @@ interface DashboardViewProps {
   dashboardOpenSortMarker: (field: "name" | "typ" | "basiswert" | "kaufzeitpunkt" | "kaufPreis" | "stueck") => string;
   onEditTrade: (trade: Trade) => void;
   onJumpToAsset: (assetName: string) => void;
+  exchange: AppSettings["exchange"];
+  language: AppSettings["language"];
+  showMarketPulse: boolean;
 }
 
 export function DashboardView({
@@ -45,8 +50,24 @@ export function DashboardView({
   onToggleDashboardOpenSort,
   dashboardOpenSortMarker,
   onEditTrade,
-  onJumpToAsset
+  onJumpToAsset,
+  exchange,
+  language,
+  showMarketPulse
 }: DashboardViewProps) {
+  const locale = language === "en" ? "en-US" : "de-AT";
+  const dashboardTime = dashboardNow.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const dashboardDate = dashboardNow.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+  const marketOpen = isMarketOpenNow(dashboardNow, exchange);
+
   return (
     <>
       <PageHeader
@@ -88,10 +109,23 @@ export function DashboardView({
         <div className="card dashboard-link-card dashboard-clock-card" role="status" aria-live="polite">
           <h3>
             <Clock3 size={14} />
-            Datum & Uhrzeit
+            {t(language, "dateTime")}
           </h3>
-          <div className="value">{formatDashboardDateTime(dashboardNow)}</div>
-          <p>Aktualisiert in Echtzeit</p>
+          <div className="dashboard-clock-grid">
+            <div className="dashboard-clock-left">
+              <div className="value">{dashboardTime}</div>
+              <p>{dashboardDate}</p>
+            </div>
+            <div className="dashboard-clock-right">
+              <p>{`Börse: ${exchange}`}</p>
+              {showMarketPulse ? (
+                <p className={`market-status ${marketOpen ? "open" : "closed"}`}>
+                  <span className={`market-pulse ${marketOpen ? "open" : "closed"}`} aria-hidden="true" />
+                  {marketOpen ? t(language, "marketOpen") : t(language, "marketClosed")}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
       </section>
 

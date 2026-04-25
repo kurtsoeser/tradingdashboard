@@ -1,7 +1,8 @@
 import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileJson, FileSpreadsheet, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
-import { calendarWeekdayNames } from "../../app/constants";
+import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
+import type { AppSettings } from "../../app/settings";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
@@ -56,6 +57,8 @@ interface TradesViewProps {
   calendarDragMoved: boolean;
   setCalendarDragMoved: React.Dispatch<React.SetStateAction<boolean>>;
   onSetSingleDayFilter: (dateKey: string) => void;
+  calendarWeekdayNames: string[];
+  language: AppSettings["language"];
 }
 
 export function TradesView(props: TradesViewProps) {
@@ -207,15 +210,17 @@ export function TradesView(props: TradesViewProps) {
 
       <div className="trades-controls-layout">
         <div className="trades-controls-main">
-          <div className="card">
-            <h3>Import Anleitung</h3>
-            <p>
-              Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: <code>tradeId, name, typ, basiswert, kaufzeitpunkt, kaufPreis, stueck, verkaufszeitpunkt, verkaufPreis, gewinn, status</code>.
-            </p>
-            <p>
-              Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
-            </p>
-          </div>
+          {props.trades.length === 0 ? (
+            <div className="card">
+              <h3>Import Anleitung</h3>
+              <p>
+                Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: <code>tradeId, name, typ, basiswert, kaufzeitpunkt, kaufPreis, stueck, verkaufszeitpunkt, verkaufPreis, gewinn, status</code>.
+              </p>
+              <p>
+                Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
+              </p>
+            </div>
+          ) : null}
           <div className="card trades-filters-card trades-filters-search-card">
             <label className="trades-single-search">
               <span className="label-with-icon">
@@ -279,11 +284,11 @@ export function TradesView(props: TradesViewProps) {
               ▶
             </button>
             <button className="secondary slim" onClick={props.onClearCalendarFilter}>
-              Reset
+              {t(props.language, "reset")}
             </button>
           </div>
           <div className="month-weekdays inline">
-            {calendarWeekdayNames.map((weekday) => (
+            {props.calendarWeekdayNames.map((weekday) => (
               <span key={`inline-${weekday}`}>{weekday}</span>
             ))}
           </div>
@@ -301,7 +306,7 @@ export function TradesView(props: TradesViewProps) {
                   key={`inline-${key}`}
                   type="button"
                   className={`day-cell inline ${inRange ? "in-range" : ""} ${isBoundary ? "range-boundary" : ""}`}
-                  title={`${key}: ${tradesForDay.length} Trade(s)`}
+                  title={`${key}: ${tradesForDay.length} ${t(props.language, "navTrades")}`}
                   onMouseDown={() => props.onCalendarDayMouseDown(key)}
                   onMouseEnter={() => props.onCalendarDayMouseEnter(key)}
                   onMouseUp={props.onCalendarMouseUp}

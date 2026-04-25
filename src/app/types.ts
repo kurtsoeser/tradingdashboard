@@ -1,6 +1,6 @@
 import type { Trade } from "../types/trade";
 
-export type View = "dashboard" | "trades" | "newTrade" | "assets" | "analytics";
+export type View = "dashboard" | "trades" | "newTrade" | "assets" | "analytics" | "settings";
 export type TradeFormType = Trade["typ"];
 export type TradesSortField = "kauf" | "verkauf" | "name" | "typ" | "kaufPreis" | "verkaufPreis" | "gewinn";
 export type DashboardOpenSortField = "name" | "typ" | "basiswert" | "kaufzeitpunkt" | "kaufPreis" | "stueck";

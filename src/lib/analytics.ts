@@ -1,9 +1,17 @@
 import type { Trade } from "../types/trade";
 
+let moneyLocale = "de-AT";
+let moneyCurrency = "EUR";
+
+export function setMoneyFormat(locale: string, currency: string) {
+  moneyLocale = locale;
+  moneyCurrency = currency;
+}
+
 export function money(value: number): string {
-  return new Intl.NumberFormat("de-AT", {
+  return new Intl.NumberFormat(moneyLocale, {
     style: "currency",
-    currency: "EUR"
+    currency: moneyCurrency
   }).format(value);
 }
 
