@@ -1497,6 +1497,28 @@ button.secondary.slim {
   width: fit-content;
 }
 
+.finance-link-btn.icon-only {
+  min-width: 34px;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+th.finance-col,
+td.finance-col {
+  width: 64px;
+  text-align: center;
+}
+
+th.action-col,
+td.action-col {
+  width: 64px;
+  text-align: center;
+}
+
 .settings-page {
   display: grid;
   gap: 12px;

@@ -1,4 +1,4 @@
-import { ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Plus, Upload } from "lucide-react";
+import { ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Pencil, Plus, Upload } from "lucide-react";
 import type { AssetSortField } from "../../app/types";
 import { money } from "../../lib/analytics";
 import type { AssetDisplayRow } from "../../app/types";
@@ -83,20 +83,6 @@ export function AssetsView({
       case "google":
       default:
         return "Google Finance";
-    }
-  })();
-
-  const financeOpenLabel = (() => {
-    switch (financeService) {
-      case "yahoo":
-        return "Bei Yahoo öffnen";
-      case "tradingview":
-        return "Bei TradingView öffnen";
-      case "investing":
-        return "Bei Investing öffnen";
-      case "google":
-      default:
-        return "Bei Google öffnen";
     }
   })();
 
@@ -250,8 +236,8 @@ export function AssetsView({
               <th onClick={() => onToggleAssetSort("openCapital")} className="sortable">
                 Offenes Kapital{assetSortMarker("openCapital")}
               </th>
-              <th>{financeServiceLabel}</th>
-              <th>Aktion</th>
+              <th className="finance-col">{financeServiceLabel}</th>
+              <th className="action-col">Aktion</th>
             </tr>
           </thead>
           <tbody>
@@ -267,14 +253,15 @@ export function AssetsView({
                 <td>{asset.tradesCount}</td>
                 <td className={asset.realizedPL >= 0 ? "positive" : "negative"}>{money(asset.realizedPL)}</td>
                 <td>{asset.openCapital > 0 ? money(asset.openCapital) : "-"}</td>
-                <td>
-                  <a className="secondary slim finance-link-btn" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer">
-                    <ExternalLink size={12} />
-                    {financeOpenLabel}
+                <td className="finance-col">
+                  <a className="secondary slim finance-link-btn icon-only" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer" title={`${financeServiceLabel} öffnen`}>
+                    <ExternalLink size={14} />
                   </a>
                 </td>
-                <td>
-                  <button className="secondary slim">Bearbeiten</button>
+                <td className="action-col">
+                  <button className="icon-btn action edit" title="Bearbeiten">
+                    <Pencil size={13} />
+                  </button>
                 </td>
               </tr>
             ))}
