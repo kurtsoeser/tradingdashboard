@@ -207,6 +207,7 @@ export default function App() {
     const losers = filteredTrades.filter((trade) => getTradeRealizedPL(trade) < 0).length;
     return { totalKauf, totalVerkauf, winners, losers };
   }, [filteredTrades]);
+  const filteredKpis = useMemo(() => getKpis(filteredTrades), [filteredTrades]);
 
   const tradesCalendarMap = useMemo(() => {
     const map = new Map<string, Trade[]>();
@@ -329,13 +330,14 @@ export default function App() {
     "verkaufTransaktionManuell",
     "verkaufSteuern",
     "verkaufGebuehren",
+    "verkaufPreisManuell",
     "verkaufPreis",
     "gewinn",
     "status"
   ];
   const templateRows: Array<Array<string | number>> = [
-    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, 1649.5, 147, "Geschlossen"],
-    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "Offen"]
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, "", 1649.5, 147, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "", "Offen"]
   ];
 
   const downloadImportTemplateCsv = () => {
@@ -444,13 +446,15 @@ export default function App() {
   const verkaufStueckpreis = Number.parseFloat(form.verkaufStueckpreis) || 0;
   const verkaufTransaktionManuell = Number.parseFloat(form.verkaufTransaktionManuell);
   const verkaufGebuehren = Number.parseFloat(form.verkaufGebuehren) || 0;
+  const verkaufPreisManuell = Number.parseFloat(form.verkaufPreisManuell);
   const kaufTransaktion =
     form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : stueck > 0 ? stueck * kaufStueckpreis : 0;
   const verkaufTransaktion =
     form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : stueck > 0 ? stueck * verkaufStueckpreis : 0;
   const verkaufSteuern = form.verkaufSteuern.trim() === "" ? verkaufTransaktion * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
   const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
-  const verkaufPreis = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
+  const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
+  const verkaufPreis = form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
   const statusClosed = !!form.verkaufszeitpunkt;
   const gewinn = statusClosed ? verkaufPreis - kaufPreis : 0;
   const rendite = kaufPreis > 0 ? (gewinn / kaufPreis) * 100 : 0;
@@ -477,6 +481,7 @@ export default function App() {
       verkaufTransaktionManuell: statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : undefined,
       verkaufSteuern: statusClosed ? verkaufSteuern : undefined,
       verkaufGebuehren: statusClosed ? verkaufGebuehren : undefined,
+      verkaufPreisManuell: statusClosed && form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : undefined,
       gewinn: statusClosed ? gewinn : undefined,
       status: statusClosed ? "Geschlossen" : "Offen"
     };
@@ -519,6 +524,7 @@ export default function App() {
       "verkaufTransaktionManuell",
       "verkaufSteuern",
       "verkaufGebuehren",
+      "verkaufPreisManuell",
       "verkaufPreis",
       "gewinn",
       "status"
@@ -541,6 +547,7 @@ export default function App() {
       trade.verkaufTransaktionManuell,
       trade.verkaufSteuern,
       trade.verkaufGebuehren,
+      trade.verkaufPreisManuell,
       trade.verkaufPreis,
       trade.gewinn,
       trade.status
@@ -596,7 +603,8 @@ export default function App() {
       verkaufStueckpreis: trade.verkaufStueckpreis !== undefined ? `${trade.verkaufStueckpreis}` : trade.verkaufPreis !== undefined ? `${trade.verkaufPreis / qty}` : "",
       verkaufTransaktionManuell: trade.verkaufTransaktionManuell !== undefined ? `${trade.verkaufTransaktionManuell}` : "",
       verkaufSteuern: `${trade.verkaufSteuern ?? ""}`,
-      verkaufGebuehren: `${trade.verkaufGebuehren ?? appSettings.defaultSellFees ?? 0}`
+      verkaufGebuehren: `${trade.verkaufGebuehren ?? appSettings.defaultSellFees ?? 0}`,
+      verkaufPreisManuell: trade.verkaufPreisManuell !== undefined ? `${trade.verkaufPreisManuell}` : ""
     });
     setView("newTrade");
   };
@@ -688,7 +696,7 @@ export default function App() {
           <TradesView
             filteredTrades={filteredTrades}
             trades={trades}
-            kpis={kpis}
+            kpis={filteredKpis}
             tradesSummary={tradesSummary}
             search={search}
             onSearchChange={setSearch}

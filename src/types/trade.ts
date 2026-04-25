@@ -30,6 +30,7 @@ export interface Trade {
   verkaufTransaktionManuell?: number;
   verkaufSteuern?: number;
   verkaufGebuehren?: number;
+  verkaufPreisManuell?: number;
   gewinn?: number;
   status: TradeStatus;
 }

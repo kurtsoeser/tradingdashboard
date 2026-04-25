@@ -46,6 +46,7 @@ export interface NewTradeForm {
   verkaufTransaktionManuell: string;
   verkaufSteuern: string;
   verkaufGebuehren: string;
+  verkaufPreisManuell: string;
 }
 
 export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
@@ -65,6 +66,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
     verkaufTransaktionManuell: "",
     verkaufSteuern: "",
     verkaufGebuehren: "",
+    verkaufPreisManuell: "",
     ...overrides
   };
 }

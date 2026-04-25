@@ -497,7 +497,13 @@ export function NewTradeView({
             <div className="calc-separator" aria-hidden="true" />
             <label className="calc-right-row">
               <span className="field-title">Verkaufserlös (EUR)</span>
-              <input value={stueckValue > 0 && verkaufStueckpreisValue > 0 ? money(verkaufserloesCalculated) : "-"} disabled />
+              <input
+                type="number"
+                step="0.01"
+                value={form.verkaufPreisManuell !== "" ? form.verkaufPreisManuell : stueckValue > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, verkaufPreisManuell: e.target.value }))}
+                placeholder={stueckValue > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : "0,00"}
+              />
             </label>
           </div>
         </div>

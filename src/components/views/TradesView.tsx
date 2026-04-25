@@ -219,7 +219,7 @@ export function TradesView(props: TradesViewProps) {
                   : "Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus:"}{" "}
                 <code>
                   tradeId, name, typ, basiswert, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell,
-                  verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreis, gewinn, status
+                  verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status
                 </code>
                 .
               </p>

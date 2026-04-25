@@ -174,6 +174,7 @@ function parseTradeRows(rows: Row[]): Trade[] {
       const verkaufTransaktionManuell = parseOptionalMoney(pick(row, "verkauftransaktionmanuell", "verkauf_transaktion_manuell", "manual_sell_transaction"));
       const verkaufSteuern = parseOptionalMoney(pick(row, "verkaufsteuern", "verkauf_steuern", "steuern", "taxes"));
       const verkaufGebuehren = parseOptionalMoney(pick(row, "verkaufgebuehren", "verkauf_gebuehren", "gebuehren_verkauf", "sell_fees"));
+      const verkaufPreisManuell = parseOptionalMoney(pick(row, "verkaufpreismanuell", "verkaufpreis_manuell", "manual_sell_total"));
 
       const sellPriceRaw = parseOptionalMoney(verkaufStr);
       const gewinnRaw = parseOptionalMoney(gewinnStr);
@@ -202,6 +203,7 @@ function parseTradeRows(rows: Row[]): Trade[] {
         verkaufTransaktionManuell,
         verkaufSteuern,
         verkaufGebuehren,
+        verkaufPreisManuell,
         gewinn,
         status
       };
