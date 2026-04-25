@@ -1,5 +1,7 @@
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import type { Trade } from "../types/trade";
+import type { AssetMeta } from "../app/types";
 
 type Row = Record<string, string | undefined>;
 
@@ -142,7 +144,11 @@ export function parseTradesCsv(csvText: string): Trade[] {
     transformHeader: (h) => h.replace(/^\ufeff/, "").trim()
   });
 
-  return parsed.data
+  return parseTradeRows(parsed.data);
+}
+
+function parseTradeRows(rows: Row[]): Trade[] {
+  return rows
     .map((raw) => toCanonRow(raw))
     .filter((row) => pick(row, "name"))
     .map((row, index) => {
@@ -183,4 +189,49 @@ export function parseTradesCsv(csvText: string): Trade[] {
         status
       };
     });
+}
+
+export async function parseTradesExcel(file: File): Promise<Trade[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return [];
+  const sheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json<Row>(sheet, { defval: "" });
+  return parseTradeRows(rows);
+}
+
+function parseAssetRows(rows: Row[]): AssetMeta[] {
+  return rows
+    .map((raw) => toCanonRow(raw))
+    .map((row) => {
+      const name = pick(row, "name", "basiswert", "asset", "underlying") ?? "";
+      return {
+        name: name.trim(),
+        category: pick(row, "category", "kategorie"),
+        tickerUs: pick(row, "tickerus", "ticker_us", "ticker us"),
+        tickerXetra: pick(row, "tickerxetra", "ticker_xetra", "ticker xetra"),
+        waehrung: pick(row, "waehrung", "währung", "currency")
+      } satisfies AssetMeta;
+    })
+    .filter((item) => item.name.length > 0);
+}
+
+export function parseAssetsCsv(csvText: string): AssetMeta[] {
+  const parsed = Papa.parse<Row>(csvText, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => h.replace(/^\ufeff/, "").trim()
+  });
+  return parseAssetRows(parsed.data);
+}
+
+export async function parseAssetsExcel(file: File): Promise<AssetMeta[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return [];
+  const sheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json<Row>(sheet, { defval: "" });
+  return parseAssetRows(rows);
 }

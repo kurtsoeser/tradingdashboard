@@ -4,6 +4,7 @@ import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
 import { buildAnalyticsData } from "../../app/derive";
+import { SimpleBarChart } from "../SimpleBarChart";
 
 type AnalyticsData = NonNullable<ReturnType<typeof buildAnalyticsData>>;
 
@@ -16,6 +17,26 @@ interface AnalyticsViewProps {
 }
 
 export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChange, trades, onBackToTrades }: AnalyticsViewProps) {
+  const plDistributionData = [
+    { label: "<-500", min: -Infinity, max: -500 },
+    { label: "-500..-200", min: -500, max: -200 },
+    { label: "-200..-100", min: -200, max: -100 },
+    { label: "-100..0", min: -100, max: 0 },
+    { label: "0..100", min: 0, max: 100 },
+    { label: "100..200", min: 100, max: 200 },
+    { label: "200..500", min: 200, max: 500 },
+    { label: ">500", min: 500, max: Infinity }
+  ].map((bucket) => {
+    const count = analyticsData.closedCount
+      ? trades.filter((t) => {
+          const pl = getTradeRealizedPL(t);
+          return isTradeClosed(t) && pl >= bucket.min && pl < bucket.max;
+        }).length
+      : 0;
+
+    return { label: bucket.label, value: count };
+  });
+
   return (
     <section className="section analytics-page">
       <PageHeader
@@ -79,11 +100,11 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
         </h3>
         <div className="analytics-insights-list">
           <div className="analytics-insight positive">
-            <span>Staerkste Serie</span>
+            <span>Stärkste Serie</span>
             <strong>{analyticsData.bestSeries} Gewinne in Folge</strong>
           </div>
           <div className="analytics-insight negative">
-            <span>Schwaechste Serie</span>
+            <span>Schwächste Serie</span>
             <strong>{analyticsData.worstSeries} Verluste in Folge</strong>
           </div>
           <div className="analytics-insight">
@@ -107,7 +128,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
 
       <div className="analytics-tabbar">
         <button className={analyticsTab === "overview" ? "secondary active" : "secondary"} onClick={() => onAnalyticsTabChange("overview")}>
-          Ueberblick
+          Überblick
         </button>
         <button className={analyticsTab === "timing" ? "secondary active" : "secondary"} onClick={() => onAnalyticsTabChange("timing")}>
           Timing & Verteilung
@@ -122,7 +143,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card analytics-grid-6">
             <h3>
               <CircleDollarSign size={14} />
-              Kauf & Verkauf Uebersicht
+              Kauf & Verkauf Übersicht
             </h3>
             <div className="analytics-mini-grid">
               <div>
@@ -138,7 +159,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
                 <strong>{money(analyticsData.totalPL)}</strong>
               </div>
               <div>
-                <span>Ø Positionsgroesse</span>
+                <span>Ø Positionsgröße</span>
                 <strong>{money(analyticsData.avgPosition)}</strong>
               </div>
               <div>
@@ -198,31 +219,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
               <ChartColumn size={14} />
               Gewinn/Verlust Verteilung
             </h3>
-            <div className="simple-chart">
-              {[
-                { label: "<-500", min: -Infinity, max: -500, color: "loss" },
-                { label: "-500..-200", min: -500, max: -200, color: "loss" },
-                { label: "-200..-100", min: -200, max: -100, color: "loss" },
-                { label: "-100..0", min: -100, max: 0, color: "loss" },
-                { label: "0..100", min: 0, max: 100, color: "win" },
-                { label: "100..200", min: 100, max: 200, color: "win" },
-                { label: "200..500", min: 200, max: 500, color: "win" },
-                { label: ">500", min: 500, max: Infinity, color: "win" }
-              ].map((b) => {
-                const count = analyticsData.closedCount
-                  ? trades.filter((t) => {
-                      const pl = getTradeRealizedPL(t);
-                      return isTradeClosed(t) && pl >= b.min && pl < b.max;
-                    }).length
-                  : 0;
-                return (
-                  <div key={b.label} className="simple-bar-wrap">
-                    <div className={`simple-bar ${b.color}`} style={{ height: `${Math.max(6, count * 6)}px` }} />
-                    <span>{b.label}</span>
-                  </div>
-                );
-              })}
-            </div>
+            <SimpleBarChart mode="count" data={plDistributionData} />
           </div>
         </div>
       )}
@@ -230,19 +227,18 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
       {analyticsTab === "timing" && (
         <div className="analytics-tab-panel">
           <div className="dashboard-bottom-grid">
-            <div className="card">
+            <div className="card chart-card">
               <h3>
                 <TrendingUp size={14} />
                 Monats-Performance
               </h3>
-              <div className="simple-chart">
-                {analyticsData.monthChart.map((m) => (
-                  <div key={`m-${m.month}`} className="simple-bar-wrap">
-                    <div className={`simple-bar ${m.pl >= 0 ? "win" : "loss"}`} style={{ height: `${Math.max(8, Math.abs(m.pl) / 35)}px` }} />
-                    <span>{m.month.slice(5)}</span>
-                  </div>
-                ))}
-              </div>
+              <SimpleBarChart
+                mode="pl"
+                data={analyticsData.monthChart.map((m) => ({
+                  label: m.month.slice(5),
+                  value: m.pl
+                }))}
+              />
             </div>
             <div className="card">
               <h3>
@@ -266,49 +262,28 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           </div>
 
           <div className="dashboard-bottom-grid">
-            <div className="card">
+            <div className="card chart-card">
               <h3>
                 <ChartColumn size={14} />
                 Performance nach Wochentag
               </h3>
-              <div className="simple-chart">
-                {analyticsData.weekdayData.map((d) => (
-                  <div key={`w-${d.label}`} className="simple-bar-wrap">
-                    <div className={`simple-bar ${d.value >= 0 ? "win" : "loss"}`} style={{ height: `${Math.max(8, Math.abs(d.value) / 20)}px` }} />
-                    <span>{d.label}</span>
-                  </div>
-                ))}
-              </div>
+              <SimpleBarChart mode="pl" data={analyticsData.weekdayData.map((d) => ({ label: d.label, value: d.value }))} />
             </div>
-            <div className="card">
+            <div className="card chart-card">
               <h3>
                 <Briefcase size={14} />
-                Trades nach Positionsgroesse
+                Trades nach Positionsgröße
               </h3>
-              <div className="simple-chart">
-                {analyticsData.sizeData.map((d) => (
-                  <div key={`s-${d.label}`} className="simple-bar-wrap">
-                    <div className="simple-bar win" style={{ height: `${Math.max(8, d.value * 7)}px` }} />
-                    <span>{d.label}</span>
-                  </div>
-                ))}
-              </div>
+              <SimpleBarChart mode="count" data={analyticsData.sizeData.map((d) => ({ label: d.label, value: d.value }))} />
             </div>
           </div>
 
-          <div className="card">
+          <div className="card chart-card">
             <h3>
               <Clock3 size={14} />
               Performance nach Uhrzeit (Kauf)
             </h3>
-            <div className="simple-chart">
-              {analyticsData.hourData.map((d) => (
-                <div key={`h-${d.label}`} className="simple-bar-wrap">
-                  <div className={`simple-bar ${d.value >= 0 ? "win" : "loss"}`} style={{ height: `${Math.max(8, Math.abs(d.value) / 22)}px` }} />
-                  <span>{d.label}</span>
-                </div>
-              ))}
-            </div>
+            <SimpleBarChart mode="pl" data={analyticsData.hourData.map((d) => ({ label: d.label, value: d.value }))} />
           </div>
 
           <div className="card analytics-grid-8">

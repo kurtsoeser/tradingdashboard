@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, CircleDollarSign, FileDown, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileJson, FileSpreadsheet, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
 import { calendarWeekdayNames } from "../../app/constants";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
@@ -30,7 +30,9 @@ interface TradesViewProps {
   availableBasiswerte: string[];
   sortMarker: (field: TradesSortField) => string;
   onToggleSort: (field: TradesSortField) => void;
-  onImportCsv: (file: File) => Promise<void>;
+  onImportTradesFile: (file: File) => Promise<void>;
+  onDownloadImportTemplateCsv: () => void;
+  onDownloadImportTemplateExcel: () => void;
   onExportTradesCsvForExcel: () => void;
   onExportTradesJsonBackup: () => void;
   onGoToNewTrade: () => void;
@@ -75,25 +77,66 @@ export function TradesView(props: TradesViewProps) {
             <input
               id="trades-import-input"
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden-file-input"
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void props.onImportCsv(file);
+                if (file) void props.onImportTradesFile(file);
               }}
             />
-            <label htmlFor="trades-import-input" className="primary file-pick-btn">
-              <FileDown size={14} />
-              Import
-            </label>
-            <button className="secondary" onClick={props.onExportTradesCsvForExcel}>
-              <FileDown size={14} />
-              CSV Export (Excel)
-            </button>
-            <button className="secondary" onClick={props.onExportTradesJsonBackup}>
-              <FileDown size={14} />
-              JSON Backup
-            </button>
+            <details className="actions-dropdown">
+              <summary className="secondary">
+                <FileDown size={14} />
+                Import
+                <ChevronDown size={14} />
+              </summary>
+              <div className="actions-dropdown-menu">
+                <label htmlFor="trades-import-input" className="actions-dropdown-item file-pick-btn">
+                  <span className="actions-dropdown-item-content">
+                    <Upload size={14} />
+                    Datei importieren
+                  </span>
+                  <small>CSV oder Excel Datei laden</small>
+                </label>
+                <button className="actions-dropdown-item" onClick={props.onDownloadImportTemplateCsv}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    Vorlage CSV herunterladen
+                  </span>
+                  <small>Beispielspalten für CSV</small>
+                </button>
+                <button className="actions-dropdown-item" onClick={props.onDownloadImportTemplateExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    Vorlage Excel herunterladen
+                  </span>
+                  <small>Beispielspalten für Excel</small>
+                </button>
+              </div>
+            </details>
+            <details className="actions-dropdown">
+              <summary className="secondary">
+                <FileDown size={14} />
+                Export
+                <ChevronDown size={14} />
+              </summary>
+              <div className="actions-dropdown-menu">
+                <button className="actions-dropdown-item" onClick={props.onExportTradesCsvForExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    CSV Export (Excel)
+                  </span>
+                  <small>Alle Trades als CSV</small>
+                </button>
+                <button className="actions-dropdown-item" onClick={props.onExportTradesJsonBackup}>
+                  <span className="actions-dropdown-item-content">
+                    <FileJson size={14} />
+                    JSON Backup
+                  </span>
+                  <small>Vollständiges Backup-Format</small>
+                </button>
+              </div>
+            </details>
             <button className="primary new-trade-cta" onClick={props.onGoToNewTrade}>
               <Plus size={14} />
               Neuer Trade
@@ -164,6 +207,15 @@ export function TradesView(props: TradesViewProps) {
 
       <div className="trades-controls-layout">
         <div className="trades-controls-main">
+          <div className="card">
+            <h3>Import Anleitung</h3>
+            <p>
+              Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: <code>tradeId, name, typ, basiswert, kaufzeitpunkt, kaufPreis, stueck, verkaufszeitpunkt, verkaufPreis, gewinn, status</code>.
+            </p>
+            <p>
+              Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
+            </p>
+          </div>
           <div className="card trades-filters-card trades-filters-search-card">
             <label className="trades-single-search">
               <span className="label-with-icon">
@@ -332,7 +384,7 @@ export function TradesView(props: TradesViewProps) {
                     <button className="icon-btn action edit" title="Bearbeiten" onClick={() => props.onEditTrade(trade)}>
                       <Pencil size={13} />
                     </button>
-                    <button className="icon-btn action delete" title="Loeschen" onClick={() => props.onDeleteTrade(trade.id)}>
+                    <button className="icon-btn action delete" title="Löschen" onClick={() => props.onDeleteTrade(trade.id)}>
                       <X size={13} />
                     </button>
                   </div>

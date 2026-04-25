@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import type { Trade } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
 import { saveTradesToStorage } from "./lib/storage";
-import { parseTradesCsv } from "./lib/csv";
+import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
+import { loadAssetMetaFromStorage, saveAssetMetaToStorage } from "./lib/assetsStorage";
 import { calendarMonthNames } from "./app/constants";
 import { daysBetween, getNowLocalDateTimeValue, parseStoredDateTime, toDisplayDateTime, toIsoMonth, toLocalInputValue } from "./app/date";
 import { csvEscape, readInitialTrades } from "./app/helpers";
 import { buildAnalyticsData, buildAssetRows, buildDashboardMonthlyStats, buildDashboardTopFlop } from "./app/derive";
-import { type AssetSortField, type DashboardOpenSortField, defaultForm, type NewTradeForm, type SortDirection, type TradesSortField, type View } from "./app/types";
+import { type AssetMeta, type AssetSortField, type DashboardOpenSortField, defaultForm, type NewTradeForm, type SortDirection, type TradesSortField, type View } from "./app/types";
 import { SidebarNav } from "./components/layout/SidebarNav";
 import { DashboardView } from "./components/views/DashboardView";
 import { TradesView } from "./components/views/TradesView";
@@ -43,6 +45,7 @@ export default function App() {
   const [assetSortDirection, setAssetSortDirection] = useState<SortDirection>("asc");
   const [analyticsTab, setAnalyticsTab] = useState<"overview" | "timing" | "assets">("overview");
   const [dashboardNow, setDashboardNow] = useState(() => new Date());
+  const [assetMeta, setAssetMeta] = useState<AssetMeta[]>(() => loadAssetMetaFromStorage());
 
   const kpis = useMemo(() => getKpis(trades), [trades]);
   useEffect(() => {
@@ -180,10 +183,37 @@ export default function App() {
   }, [baseFilteredTrades, calendarMonth]);
 
   const assetRows = useMemo(() => buildAssetRows(trades), [trades]);
-  const assetCategories = useMemo(() => ["Alle", ...new Set(assetRows.map((row) => row.category))], [assetRows]);
+  const assetRowsWithMeta = useMemo(() => {
+    const byName = new Map(assetRows.map((row) => [row.name.toLowerCase(), row]));
+    const merged = assetRows.map((row) => {
+      const meta = assetMeta.find((item) => item.name.toLowerCase() === row.name.toLowerCase());
+      return {
+        ...row,
+        category: meta?.category || row.category,
+        tickerUs: meta?.tickerUs,
+        tickerXetra: meta?.tickerXetra,
+        waehrung: meta?.waehrung
+      };
+    });
+    const additional = assetMeta
+      .filter((item) => !byName.has(item.name.toLowerCase()))
+      .map((item) => ({
+        name: item.name,
+        category: item.category || "Manuell",
+        tradesCount: 0,
+        realizedPL: 0,
+        openCapital: 0,
+        hasOpen: false,
+        tickerUs: item.tickerUs,
+        tickerXetra: item.tickerXetra,
+        waehrung: item.waehrung
+      }));
+    return [...merged, ...additional];
+  }, [assetRows, assetMeta]);
+  const assetCategories = useMemo(() => ["Alle", ...new Set(assetRowsWithMeta.map((row) => row.category))], [assetRowsWithMeta]);
   const filteredAssets = useMemo(() => {
     const normalizedSearch = assetSearch.trim().toLowerCase();
-    const base = assetRows.filter((row) => {
+    const base = assetRowsWithMeta.filter((row) => {
       const matchSearch = !normalizedSearch || row.name.toLowerCase().includes(normalizedSearch);
       const matchCategory = assetCategoryFilter === "Alle" || row.category === assetCategoryFilter;
       return matchSearch && matchCategory;
@@ -217,7 +247,7 @@ export default function App() {
       if (av > bv) return assetSortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [assetRows, assetSearch, assetCategoryFilter, assetSortField, assetSortDirection]);
+  }, [assetRowsWithMeta, assetSearch, assetCategoryFilter, assetSortField, assetSortDirection]);
 
   const assetSummary = useMemo(() => {
     const totalAssets = filteredAssets.length;
@@ -230,11 +260,119 @@ export default function App() {
     return { totalAssets, withOpen, totalPL, categoryCount };
   }, [filteredAssets]);
 
-  const importCsv = async (file: File) => {
-    const text = await file.text();
-    const rows = parseTradesCsv(text);
+  const importTradesFile = async (file: File) => {
+    const fileName = file.name.toLowerCase();
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+    const rows = isExcel ? await parseTradesExcel(file) : parseTradesCsv(await file.text());
+    if (rows.length === 0) {
+      window.alert("Keine gültigen Trades gefunden. Bitte Vorlage und Spalten prüfen.");
+      return;
+    }
     setTrades(rows);
     saveTradesToStorage(rows);
+  };
+
+  const templateHeader = ["tradeId", "name", "typ", "basiswert", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
+  const templateRows: Array<Array<string | number>> = [
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "2026-04-01 10:00", 1500, 10, "2026-04-10 15:45", 1675, 175, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "2026-04-12 09:30", 900, 0.025, "", "", "", "Offen"]
+  ];
+
+  const downloadImportTemplateCsv = () => {
+    const csvBody = [templateHeader, ...templateRows].map((row) => row.map((cell) => csvEscape(cell)).join(";")).join("\r\n");
+    const csv = `\uFEFFsep=;\r\n${csvBody}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "trades-import-vorlage.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadImportTemplateExcel = () => {
+    const worksheet = XLSX.utils.aoa_to_sheet([templateHeader, ...templateRows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Trades");
+    XLSX.writeFile(workbook, "trades-import-vorlage.xlsx");
+  };
+
+  const assetTemplateHeader = ["name", "category", "tickerUs", "tickerXetra", "währung"];
+  const assetTemplateRows: Array<Array<string>> = [
+    ["AAPL", "Aktie", "AAPL", "APC", "USD"],
+    ["BTCUSD", "Krypto", "BTC-USD", "", "USD"]
+  ];
+
+  const importAssetsFile = async (file: File) => {
+    const fileName = file.name.toLowerCase();
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+    const rows = isExcel ? await parseAssetsExcel(file) : parseAssetsCsv(await file.text());
+    if (rows.length === 0) {
+      window.alert("Keine gültigen Basiswerte gefunden. Bitte Vorlage und Spalten prüfen.");
+      return;
+    }
+    setAssetMeta(rows);
+    saveAssetMetaToStorage(rows);
+  };
+
+  const downloadAssetTemplateCsv = () => {
+    const csvBody = [assetTemplateHeader, ...assetTemplateRows].map((row) => row.map((cell) => csvEscape(cell)).join(";")).join("\r\n");
+    const csv = `\uFEFFsep=;\r\n${csvBody}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "basiswerte-import-vorlage.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadAssetTemplateExcel = () => {
+    const worksheet = XLSX.utils.aoa_to_sheet([assetTemplateHeader, ...assetTemplateRows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Basiswerte");
+    XLSX.writeFile(workbook, "basiswerte-import-vorlage.xlsx");
+  };
+
+  const exportAssetsCsv = () => {
+    const header = ["name", "category", "tickerUs", "tickerXetra", "währung", "tradesCount", "realizedPL", "openCapital"];
+    const rows = assetRowsWithMeta.map((asset) => [
+      asset.name,
+      asset.category,
+      asset.tickerUs ?? "",
+      asset.tickerXetra ?? "",
+      asset.waehrung ?? "EUR",
+      asset.tradesCount,
+      asset.realizedPL,
+      asset.openCapital
+    ]);
+    const csvBody = [header, ...rows].map((row) => row.map((cell) => csvEscape(cell)).join(";")).join("\r\n");
+    const csv = `\uFEFFsep=;\r\n${csvBody}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "basiswerte-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAssetsExcel = () => {
+    const header = ["name", "category", "tickerUs", "tickerXetra", "währung", "tradesCount", "realizedPL", "openCapital"];
+    const rows = assetRowsWithMeta.map((asset) => [
+      asset.name,
+      asset.category,
+      asset.tickerUs ?? "",
+      asset.tickerXetra ?? "",
+      asset.waehrung ?? "EUR",
+      asset.tradesCount,
+      asset.realizedPL,
+      asset.openCapital
+    ]);
+    const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Basiswerte");
+    XLSX.writeFile(workbook, "basiswerte-export.xlsx");
   };
 
   const kaufPreis = Number.parseFloat(form.kaufPreis) || 0;
@@ -424,7 +562,9 @@ export default function App() {
             availableBasiswerte={availableBasiswerte}
             sortMarker={sortMarker}
             onToggleSort={toggleSort}
-            onImportCsv={importCsv}
+            onImportTradesFile={importTradesFile}
+            onDownloadImportTemplateCsv={downloadImportTemplateCsv}
+            onDownloadImportTemplateExcel={downloadImportTemplateExcel}
             onExportTradesCsvForExcel={exportTradesCsvForExcel}
             onExportTradesJsonBackup={exportTradesJsonBackup}
             onGoToNewTrade={() => setView("newTrade")}
@@ -476,6 +616,11 @@ export default function App() {
             filteredAssets={filteredAssets}
             onToggleAssetSort={toggleAssetSort}
             assetSortMarker={assetSortMarker}
+            onImportAssetsFile={importAssetsFile}
+            onDownloadAssetTemplateCsv={downloadAssetTemplateCsv}
+            onDownloadAssetTemplateExcel={downloadAssetTemplateExcel}
+            onExportAssetsCsv={exportAssetsCsv}
+            onExportAssetsExcel={exportAssetsExcel}
             onGoToNewTrade={() => setView("newTrade")}
           />
         )}

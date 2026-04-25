@@ -57,7 +57,7 @@ export function DashboardView({
             Trading Dashboard
           </>
         }
-        subtitle="Ueberblick ueber deine Trading-Performance"
+        subtitle="Überblick über deine Trading-Performance"
       />
 
       <section className="section dashboard-link-grid">
@@ -125,7 +125,7 @@ export function DashboardView({
                 Investiert{dashboardOpenSortMarker("kaufPreis")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("stueck")} className="sortable">
-                Stueck{dashboardOpenSortMarker("stueck")}
+                Stück{dashboardOpenSortMarker("stueck")}
               </th>
             </tr>
           </thead>

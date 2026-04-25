@@ -36,7 +36,7 @@ export function NewTradeView({
     <section className="section new-trade">
       <PageHeader
         title={editingTradeId ? "Trade bearbeiten" : "Neuer Trade"}
-        subtitle={editingTradeId ? "Bearbeite den ausgewaehlten Trade" : "Erfasse einen neuen Trade"}
+        subtitle={editingTradeId ? "Bearbeite den ausgewählten Trade" : "Erfasse einen neuen Trade"}
         actions={
           <button className="secondary" onClick={onSetViewTrades}>
             <CandlestickChart size={14} />
@@ -90,7 +90,7 @@ export function NewTradeView({
                 <button
                   type="button"
                   className="icon-btn"
-                  title="Aktuelle Zeit uebernehmen"
+                  title="Aktuelle Zeit übernehmen"
                   onClick={() => setForm((prev) => ({ ...prev, kaufzeitpunkt: getNowLocalDateTimeValue() }))}
                 >
                   <Clock3 size={14} />
@@ -109,7 +109,7 @@ export function NewTradeView({
               />
             </label>
             <label>
-              Stueck
+              Stück
               <input
                 type="number"
                 step="0.0001"
@@ -135,7 +135,7 @@ export function NewTradeView({
                 }))
               }
             >
-              {statusClosed ? "Wieder oeffnen" : "Jetzt schliessen"}
+              {statusClosed ? "Wieder öffnen" : "Jetzt schließen"}
             </button>
           </div>
           <div className="form-grid">
@@ -158,7 +158,7 @@ export function NewTradeView({
                 <button
                   type="button"
                   className="icon-btn"
-                  title="Aktuelle Zeit uebernehmen"
+                  title="Aktuelle Zeit übernehmen"
                   onClick={() => setForm((prev) => ({ ...prev, verkaufszeitpunkt: getNowLocalDateTimeValue() }))}
                   disabled={!statusClosed}
                 >
@@ -200,7 +200,7 @@ export function NewTradeView({
 
       <div className="new-trade-actions">
         <button className="primary" onClick={onSaveNewTrade}>
-          {editingTradeId ? "Aenderungen speichern" : "Speichern"}
+          {editingTradeId ? "Änderungen speichern" : "Speichern"}
         </button>
         <button
           className="secondary"

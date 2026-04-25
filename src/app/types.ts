@@ -16,6 +16,20 @@ export interface AssetRow {
   hasOpen: boolean;
 }
 
+export interface AssetMeta {
+  name: string;
+  category?: string;
+  tickerUs?: string;
+  tickerXetra?: string;
+  waehrung?: string;
+}
+
+export interface AssetDisplayRow extends AssetRow {
+  tickerUs?: string;
+  tickerXetra?: string;
+  waehrung?: string;
+}
+
 export interface NewTradeForm {
   name: string;
   typ: TradeFormType;
