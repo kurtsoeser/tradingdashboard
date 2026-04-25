@@ -34,6 +34,7 @@ export interface NewTradeForm {
   name: string;
   typ: TradeFormType;
   basiswert: string;
+  notiz: string;
   kaufzeitpunkt: string;
   kaufPreis: string;
   stueck: string;
@@ -47,6 +48,7 @@ export function defaultForm(): NewTradeForm {
     name: "",
     typ: "Long",
     basiswert: "",
+    notiz: "",
     kaufzeitpunkt: "",
     kaufPreis: "",
     stueck: "",

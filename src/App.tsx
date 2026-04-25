@@ -18,6 +18,11 @@ import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 
 export default function App() {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const saved = window.localStorage.getItem("theme");
+    if (saved === "dark" || saved === "light") return saved;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
   const [view, setView] = useState<View>("dashboard");
   const [trades, setTrades] = useState<Trade[]>(() => readInitialTrades());
   const [form, setForm] = useState<NewTradeForm>(defaultForm());
@@ -52,6 +57,10 @@ export default function App() {
     const timer = window.setInterval(() => setDashboardNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -272,10 +281,10 @@ export default function App() {
     saveTradesToStorage(rows);
   };
 
-  const templateHeader = ["tradeId", "name", "typ", "basiswert", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
+  const templateHeader = ["tradeId", "name", "typ", "basiswert", "notiz", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
   const templateRows: Array<Array<string | number>> = [
-    ["trade-001", "Apple Swing", "Aktie", "AAPL", "2026-04-01 10:00", 1500, 10, "2026-04-10 15:45", 1675, 175, "Geschlossen"],
-    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "2026-04-12 09:30", 900, 0.025, "", "", "", "Offen"]
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 1500, 10, "2026-04-10 15:45", 1675, 175, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 900, 0.025, "", "", "", "Offen"]
   ];
 
   const downloadImportTemplateCsv = () => {
@@ -390,6 +399,7 @@ export default function App() {
       name: form.name.trim(),
       typ: form.typ,
       basiswert: form.basiswert.trim(),
+      notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
       kaufPreis,
       stueck: form.stueck ? Number.parseFloat(form.stueck) : undefined,
@@ -413,8 +423,21 @@ export default function App() {
   };
   const sortMarker = (field: TradesSortField) => (sortField === field ? (sortDirection === "asc" ? " ↑" : " ↓") : " ↕");
   const exportTradesCsvForExcel = () => {
-    const header = ["tradeId", "name", "typ", "basiswert", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
-    const rows = trades.map((trade) => [trade.id, trade.name, trade.typ, trade.basiswert, trade.kaufzeitpunkt, trade.kaufPreis, trade.stueck, trade.verkaufszeitpunkt, trade.verkaufPreis, trade.gewinn, trade.status]);
+    const header = ["tradeId", "name", "typ", "basiswert", "notiz", "kaufzeitpunkt", "kaufPreis", "stueck", "verkaufszeitpunkt", "verkaufPreis", "gewinn", "status"];
+    const rows = trades.map((trade) => [
+      trade.id,
+      trade.name,
+      trade.typ,
+      trade.basiswert,
+      trade.notiz,
+      trade.kaufzeitpunkt,
+      trade.kaufPreis,
+      trade.stueck,
+      trade.verkaufszeitpunkt,
+      trade.verkaufPreis,
+      trade.gewinn,
+      trade.status
+    ]);
     const csvBody = [header, ...rows].map((row) => row.map((cell) => csvEscape(cell)).join(";")).join("\r\n");
     const csv = `\uFEFFsep=;\r\n${csvBody}`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -450,6 +473,7 @@ export default function App() {
       name: trade.name,
       typ: trade.typ,
       basiswert: trade.basiswert,
+      notiz: trade.notiz ?? "",
       kaufzeitpunkt: toLocalInputValue(trade.kaufzeitpunkt),
       kaufPreis: `${trade.kaufPreis ?? 0}`,
       stueck: trade.stueck !== undefined ? `${trade.stueck}` : "",
@@ -520,7 +544,7 @@ export default function App() {
 
   return (
     <div className="layout">
-      <SidebarNav view={view} onViewChange={setView} />
+      <SidebarNav view={view} onViewChange={setView} theme={theme} onThemeChange={setTheme} />
       <main className="content">
         {view === "dashboard" && (
           <DashboardView

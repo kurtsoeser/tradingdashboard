@@ -1,12 +1,14 @@
-import { BarChart3, CandlestickChart, Database, LayoutDashboard } from "lucide-react";
+import { BarChart3, CandlestickChart, Database, LayoutDashboard, Moon, Sun } from "lucide-react";
 import type { View } from "../../app/types";
 
 interface SidebarNavProps {
   view: View;
   onViewChange: (view: View) => void;
+  theme: "dark" | "light";
+  onThemeChange: (theme: "dark" | "light") => void;
 }
 
-export function SidebarNav({ view, onViewChange }: SidebarNavProps) {
+export function SidebarNav({ view, onViewChange, theme, onThemeChange }: SidebarNavProps) {
   return (
     <aside className="sidebar">
       <div className="brand">Trading Dashboard</div>
@@ -26,6 +28,12 @@ export function SidebarNav({ view, onViewChange }: SidebarNavProps) {
         <button className={view === "analytics" ? "active" : ""} onClick={() => onViewChange("analytics")}>
           <BarChart3 size={15} />
           Auswertungen
+        </button>
+      </div>
+      <div className="sidebar-theme-switcher">
+        <button className="secondary theme-switch-btn" onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}>
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          {theme === "dark" ? "Light Modus" : "Dark Modus"}
         </button>
       </div>
     </aside>

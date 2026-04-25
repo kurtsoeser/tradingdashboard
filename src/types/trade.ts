@@ -16,6 +16,7 @@ export interface Trade {
   name: string;
   typ: TradeType | string;
   basiswert: string;
+  notiz?: string;
   kaufzeitpunkt: string;
   kaufPreis: number;
   stueck?: number;

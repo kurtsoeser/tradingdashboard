@@ -198,6 +198,18 @@ export function NewTradeView({
         </div>
       </div>
 
+      <div className="card form-card notes-card">
+        <h3>Notizen</h3>
+        <label className="notes-label">
+          Kommentar / Notizen
+          <textarea
+            value={form.notiz}
+            onChange={(e) => setForm((prev) => ({ ...prev, notiz: e.target.value }))}
+            placeholder="Hier kannst du Gedanken, Setup, Regeln oder Beobachtungen zum Trade notieren..."
+          />
+        </label>
+      </div>
+
       <div className="new-trade-actions">
         <button className="primary" onClick={onSaveNewTrade}>
           {editingTradeId ? "Änderungen speichern" : "Speichern"}
