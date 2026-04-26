@@ -130,7 +130,7 @@ export function DashboardView({
       </section>
 
       <section className="section">
-        <EquityCurve trades={trades} />
+        <EquityCurve trades={trades} language={language} />
       </section>
 
       <section className="section card">
