@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, FileText, HandCoins, Landmark, Tags, TrendingUp } from "lucide-react";
 import { formatMonthLabel, getNowLocalDateTimeValue, parseStoredDateTime } from "../../app/date";
-import { type NewTradeForm, type TradeFormType } from "../../app/types";
+import type { AssetDisplayRow, AssetMeta, NewTradeForm, TradeFormType } from "../../app/types";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
+import { canonicalizeBasiswert, sameBasiswertBucket } from "../../lib/basiswertCanonical";
+import { lookupKnownTickerSuggestion } from "../../data/knownAssetTickers";
+import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
+import { TradingViewLiveChart } from "../TradingViewLiveChart";
 
 interface NewTradeViewProps {
   editingTradeId: string | null;
   trades: Trade[];
+  assetMeta: AssetMeta[];
+  chartTheme: "dark" | "light";
   form: NewTradeForm;
   setForm: React.Dispatch<React.SetStateAction<NewTradeForm>>;
   statusClosed: boolean;
@@ -24,6 +30,8 @@ interface NewTradeViewProps {
 export function NewTradeView({
   editingTradeId,
   trades,
+  assetMeta,
+  chartTheme,
   form,
   setForm,
   statusClosed,
@@ -182,6 +190,27 @@ export function NewTradeView({
     };
   }, [form.basiswert, trades]);
 
+  const basiswertLiveTvSymbol = useMemo(() => {
+    const raw = form.basiswert.trim();
+    if (!raw) return null;
+    const canon = canonicalizeBasiswert(raw);
+    const meta = assetMeta.find((m) => sameBasiswertBucket(m.name, canon));
+    const tickerKnown = lookupKnownTickerSuggestion(canon)?.ticker?.trim();
+    const ticker = (meta?.ticker?.trim() || tickerKnown) ?? "";
+    if (!ticker) return null;
+    const row: AssetDisplayRow = {
+      name: canon,
+      category: meta?.category ?? "Aktie",
+      tradesCount: 0,
+      realizedPL: 0,
+      openCapital: 0,
+      hasOpen: false,
+      ticker,
+      waehrung: meta?.waehrung
+    };
+    return assetToTradingViewSymbol(row);
+  }, [form.basiswert, assetMeta]);
+
   const renderMiniBars = (data: Array<{ label: string; value: number }>, mode: "pl" | "count") => {
     if (data.length === 0) {
       return <p className="asset-history-empty">Noch nicht genug Daten.</p>;
@@ -247,7 +276,7 @@ export function NewTradeView({
       />
 
       <div className="new-trade-grid">
-        <div className="card form-card card-span-3">
+        <div className="card form-card card-span-2">
           <div className="card-title-row">
             <h3>Grunddaten</h3>
             <Tags size={20} className="card-title-icon" />
@@ -289,6 +318,37 @@ export function NewTradeView({
             </label>
           </div>
         </div>
+
+        <div className="card form-card notes-card new-trade-notes-card card-span-1">
+          <div className="card-title-row">
+            <h3>Notizen</h3>
+            <FileText size={20} className="card-title-icon" />
+          </div>
+          <label className="notes-label">
+            <span className="field-title">Kommentar / Notizen</span>
+            <textarea
+              value={form.notiz}
+              onChange={(e) => setForm((prev) => ({ ...prev, notiz: e.target.value }))}
+              placeholder="Hier kannst du Gedanken, Setup, Regeln oder Beobachtungen zum Trade notieren..."
+            />
+          </label>
+        </div>
+
+        {basiswertLiveTvSymbol && (
+          <div className="card form-card card-span-3 new-trade-basis-chart-card">
+            <div className="card-title-row">
+              <h3>
+                <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
+                Live-Chart (Basiswert)
+              </h3>
+            </div>
+            <p className="live-chart-hint live-chart-hint-compact">
+              Vorschau aus gespeichertem Ticker oder bekannter Zuordnung für <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> —{" "}
+              <code>{basiswertLiveTvSymbol}</code>
+            </p>
+            <TradingViewLiveChart symbol={basiswertLiveTvSymbol} theme={chartTheme} height={340} />
+          </div>
+        )}
 
         <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
@@ -530,21 +590,6 @@ export function NewTradeView({
               <input value={`${haltedauer}`} disabled />
             </label>
           </div>
-        </div>
-
-        <div className="card form-card notes-card card-span-1">
-          <div className="card-title-row">
-            <h3>Notizen</h3>
-            <FileText size={20} className="card-title-icon" />
-          </div>
-          <label className="notes-label">
-            <span className="field-title">Kommentar / Notizen</span>
-            <textarea
-              value={form.notiz}
-              onChange={(e) => setForm((prev) => ({ ...prev, notiz: e.target.value }))}
-              placeholder="Hier kannst du Gedanken, Setup, Regeln oder Beobachtungen zum Trade notieren..."
-            />
-          </label>
         </div>
 
         <div className="card form-card asset-history-card card-span-1">

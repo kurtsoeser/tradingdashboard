@@ -214,8 +214,43 @@ button.primary {
   grid-column: span 3;
 }
 
+.card-span-2 {
+  grid-column: span 2;
+}
+
 .card-span-1 {
   grid-column: span 1;
+}
+
+/* Neuer Trade: Notizen neben Grunddaten — Textarea nutzt die Kartenhöhe */
+.new-trade-notes-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.new-trade-notes-card .card-title-row {
+  flex-shrink: 0;
+}
+
+.new-trade-notes-card .notes-label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.new-trade-notes-card textarea {
+  flex: 1;
+  min-height: 160px;
+  resize: vertical;
+}
+
+.new-trade-basis-chart-card {
+  margin-top: 0;
+}
+
+.new-trade-basis-chart-card .live-chart-hint-compact {
+  margin-top: 0;
 }
 
 .form-card h3 {
@@ -1959,6 +1994,9 @@ td.action-col {
   .card-span-3 {
     grid-column: span 2;
   }
+  .card-span-2 {
+    grid-column: span 2;
+  }
   .card-span-1 {
     grid-column: span 1;
   }
@@ -2096,6 +2134,7 @@ td.action-col {
     grid-template-columns: 1fr;
   }
   .card-span-3,
+  .card-span-2,
   .card-span-1 {
     grid-column: span 1;
   }

@@ -841,6 +841,8 @@ export default function App() {
           <NewTradeView
             editingTradeId={editingTradeId}
             trades={trades}
+            assetMeta={assetMeta}
+            chartTheme={theme}
             form={form}
             setForm={setForm}
             statusClosed={statusClosed}
