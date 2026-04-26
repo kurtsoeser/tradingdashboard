@@ -1,12 +1,13 @@
 export interface JournalData {
   byDay: Record<string, string>;
   byWeek: Record<string, string>;
+  byMonth: Record<string, string>;
 }
 
 const STORAGE_KEY = "trading-journal-v1";
 
 function emptyJournal(): JournalData {
-  return { byDay: {}, byWeek: {} };
+  return { byDay: {}, byWeek: {}, byMonth: {} };
 }
 
 export function loadJournalFromStorage(): JournalData {
@@ -18,7 +19,8 @@ export function loadJournalFromStorage(): JournalData {
     const o = parsed as Record<string, unknown>;
     const byDay = o.byDay && typeof o.byDay === "object" && !Array.isArray(o.byDay) ? (o.byDay as Record<string, string>) : {};
     const byWeek = o.byWeek && typeof o.byWeek === "object" && !Array.isArray(o.byWeek) ? (o.byWeek as Record<string, string>) : {};
-    return { byDay, byWeek };
+    const byMonth = o.byMonth && typeof o.byMonth === "object" && !Array.isArray(o.byMonth) ? (o.byMonth as Record<string, string>) : {};
+    return { byDay, byWeek, byMonth };
   } catch {
     return emptyJournal();
   }

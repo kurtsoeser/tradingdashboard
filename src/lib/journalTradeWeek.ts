@@ -1,6 +1,6 @@
 import { parseStoredDateTime } from "../app/date";
 import type { Trade } from "../types/trade";
-import { getIsoWeekYearAndWeek } from "./journalIsoWeek";
+import { getIsoWeekYearAndWeek, toLocalYmd } from "./journalIsoWeek";
 
 export function dateInIsoWeek(d: Date, isoYear: number, week: number): boolean {
   const { isoYear: y, week: w } = getIsoWeekYearAndWeek(d);
@@ -26,4 +26,30 @@ export function sortTradesByKaufDesc(trades: Trade[]): Trade[] {
     const tb = parseStoredDateTime(b.kaufzeitpunkt)?.getTime() ?? 0;
     return tb - ta;
   });
+}
+
+/** Kalendertag lokal (YYYY-MM-DD) für Kauf- oder Verkaufszeitpunkt */
+export function tradeTouchesLocalYmd(trade: Trade, ymd: string): boolean {
+  const kauf = parseStoredDateTime(trade.kaufzeitpunkt);
+  if (kauf && toLocalYmd(kauf) === ymd) return true;
+  const verkauf = parseStoredDateTime(trade.verkaufszeitpunkt);
+  if (verkauf && toLocalYmd(verkauf) === ymd) return true;
+  return false;
+}
+
+export function filterTradesByLocalYmd(trades: Trade[], ymd: string): Trade[] {
+  return trades.filter((t) => tradeTouchesLocalYmd(t, ymd));
+}
+
+/** Kalendermonat lokal (YYYY-MM) für Kauf- oder Verkaufszeitpunkt */
+export function tradeTouchesLocalYm(trade: Trade, ym: string): boolean {
+  const kauf = parseStoredDateTime(trade.kaufzeitpunkt);
+  if (kauf && toLocalYmd(kauf).slice(0, 7) === ym) return true;
+  const verkauf = parseStoredDateTime(trade.verkaufszeitpunkt);
+  if (verkauf && toLocalYmd(verkauf).slice(0, 7) === ym) return true;
+  return false;
+}
+
+export function filterTradesByLocalYm(trades: Trade[], ym: string): Trade[] {
+  return trades.filter((t) => tradeTouchesLocalYm(t, ym));
 }

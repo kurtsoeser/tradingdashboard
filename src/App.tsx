@@ -105,6 +105,18 @@ export default function App() {
     });
   };
 
+  const handleJournalMonthChange = (ym: string, text: string) => {
+    setJournalData((prev) => {
+      const byMonth = { ...prev.byMonth };
+      const trimmed = text.trim();
+      if (trimmed) byMonth[ym] = text;
+      else delete byMonth[ym];
+      const next = { ...prev, byMonth };
+      saveJournalToStorage(next);
+      return next;
+    });
+  };
+
   const makeDefaultTradeForm = () =>
     defaultForm({
       kaufGebuehren: `${appSettings.defaultBuyFees ?? 0}`,
@@ -951,6 +963,7 @@ export default function App() {
             trades={trades}
             onJournalDayChange={handleJournalDayChange}
             onJournalWeekChange={handleJournalWeekChange}
+            onJournalMonthChange={handleJournalMonthChange}
             onEditTrade={editTrade}
             onDeleteTrade={deleteTrade}
           />
