@@ -1,5 +1,5 @@
-import { useMemo, useState, type MouseEvent } from "react";
-import { RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { CalendarDays, RotateCcw } from "lucide-react";
 import type { AppSettings } from "../app/settings";
 import { t } from "../app/i18n";
 import type { Trade } from "../types/trade";
@@ -93,6 +93,28 @@ function addDays(date: Date, days: number): Date {
 function daysBetween(a: Date, b: Date): number {
   const msPerDay = 24 * 60 * 60 * 1000;
   return Math.max(0, Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / msPerDay));
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function clampDate(date: Date, min?: Date | null, max?: Date | null): Date {
+  if (min && date < min) return min;
+  if (max && date > max) return max;
+  return date;
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
 }
 
 function startOfWeek(date: Date): Date {
@@ -360,7 +382,7 @@ export function EquityCurve({
       y: scaleY(value)
     });
   }
-  const showTooltip = (event: MouseEvent<SVGElement>, point: EquityPoint) => {
+  const showTooltip = (event: ReactMouseEvent<SVGElement>, point: EquityPoint) => {
     const svg = event.currentTarget.closest("svg");
     if (!svg) return;
     const box = svg.getBoundingClientRect();
@@ -574,6 +596,11 @@ function EquityToolbar({
 }) {
   const [editingDate, setEditingDate] = useState<"from" | "to" | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+  const [rangeDraftStart, setRangeDraftStart] = useState<Date | null>(null);
+  const [draggingRange, setDraggingRange] = useState(false);
+  const calendarWrapRef = useRef<HTMLDivElement | null>(null);
   const presetLabel = (d: (typeof PRESET_DAYS)[number]) => t(language, `days${d}` as PresetKey);
 
   const sliderMinDate = dateMin ? parseIsoDateInput(dateMin) : null;
@@ -589,6 +616,7 @@ function EquityToolbar({
     sliderMinDate && sliderToDate ? Math.min(sliderTotalDays, Math.max(0, daysBetween(sliderMinDate, sliderToDate))) : sliderTotalDays;
 
   const hasSlider = Boolean(sliderMinDate && sliderMaxDate && daysBetween(sliderMinDate, sliderMaxDate) > 0);
+  const calendarBaseDate = addMonths(sliderToDate ?? sliderMaxDate ?? new Date(), calendarMonthOffset);
 
   const beginDateEdit = (target: "from" | "to") => {
     const currentValue = target === "from" ? dateFrom || dateMin : dateTo || dateMax;
@@ -619,6 +647,60 @@ function EquityToolbar({
     }
 
     setEditingDate(null);
+  };
+
+  useEffect(() => {
+    const onDocMouseDown = (event: globalThis.MouseEvent) => {
+      if (!calendarWrapRef.current) return;
+      if (!calendarWrapRef.current.contains(event.target as Node)) {
+        setCalendarOpen(false);
+        setDraggingRange(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  useEffect(() => {
+    if (!draggingRange) return;
+    const onMouseUp = () => {
+      setDraggingRange(false);
+      setRangeDraftStart(null);
+    };
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, [draggingRange]);
+
+  const applyCalendarRange = (from: Date, to: Date) => {
+    if (!sliderMinDate || !sliderMaxDate) return;
+    let a = clampDate(startOfDay(from), sliderMinDate, sliderMaxDate);
+    let b = clampDate(startOfDay(to), sliderMinDate, sliderMaxDate);
+    if (a > b) [a, b] = [b, a];
+    onDateFromChange(toIsoDateString(a));
+    onDateToChange(toIsoDateString(b));
+  };
+
+  const handleCalendarPick = (date: Date) => {
+    if (!sliderMinDate || !sliderMaxDate) return;
+    if (draggingRange) return;
+    applyCalendarRange(date, date);
+    setRangeDraftStart(null);
+  };
+
+  const handleCalendarDragStart = (date: Date) => {
+    setRangeDraftStart(date);
+    setDraggingRange(true);
+    applyCalendarRange(date, date);
+  };
+
+  const handleCalendarDragMove = (date: Date) => {
+    if (!draggingRange || !rangeDraftStart) return;
+    applyCalendarRange(rangeDraftStart, date);
+  };
+
+  const handleCalendarDragEnd = () => {
+    setDraggingRange(false);
+    setRangeDraftStart(null);
   };
 
   return (
@@ -718,6 +800,39 @@ function EquityToolbar({
             </button>
           )}
         </div>
+        <div className="equity-calendar-wrap" ref={calendarWrapRef}>
+          <button
+            type="button"
+            className={`equity-calendar-toggle ${calendarOpen ? "active" : ""}`}
+            aria-label={t(language, "equityCalendar")}
+            title={t(language, "equityCalendar")}
+            onClick={() =>
+              setCalendarOpen((v) => {
+                const next = !v;
+                if (next) setCalendarMonthOffset(0);
+                return next;
+              })
+            }
+          >
+            <CalendarDays size={14} />
+          </button>
+          {calendarOpen ? (
+            <MiniCalendar
+              language={language}
+              viewDate={calendarBaseDate}
+              onPrevMonth={() => setCalendarMonthOffset((n) => n - 1)}
+              onNextMonth={() => setCalendarMonthOffset((n) => n + 1)}
+              minDate={sliderMinDate}
+              maxDate={sliderMaxDate}
+              fromDate={sliderFromDate}
+              toDate={sliderToDate}
+              onPickDate={handleCalendarPick}
+              onDragStartDate={handleCalendarDragStart}
+              onDragMoveDate={handleCalendarDragMove}
+              onDragEnd={handleCalendarDragEnd}
+            />
+          ) : null}
+        </div>
       </div>
       <div className="equity-toolbar-row equity-preset-row">
         <div className="equity-controls equity-presets">
@@ -730,6 +845,98 @@ function EquityToolbar({
             {t(language, "equityClearRange")}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniCalendar({
+  language,
+  viewDate,
+  onPrevMonth,
+  onNextMonth,
+  minDate,
+  maxDate,
+  fromDate,
+  toDate,
+  onPickDate,
+  onDragStartDate,
+  onDragMoveDate,
+  onDragEnd
+}: {
+  language: AppSettings["language"];
+  viewDate: Date;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  minDate: Date | null;
+  maxDate: Date | null;
+  fromDate: Date | null;
+  toDate: Date | null;
+  onPickDate: (date: Date) => void;
+  onDragStartDate: (date: Date) => void;
+  onDragMoveDate: (date: Date) => void;
+  onDragEnd: () => void;
+}) {
+  const monthStart = startOfMonth(viewDate);
+  const gridStart = startOfWeek(monthStart);
+  const days: Date[] = [];
+  for (let i = 0; i < 42; i += 1) {
+    days.push(addDays(gridStart, i));
+  }
+  const labels = language === "en" ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+  const from = fromDate ? startOfDay(fromDate) : null;
+  const to = toDate ? startOfDay(toDate) : null;
+
+  return (
+    <div className="equity-mini-calendar">
+      <div className="equity-mini-calendar-hint">
+        {t(language, "equityCalendarHint")}
+      </div>
+      <div className="equity-mini-calendar-head">
+        <button type="button" className="equity-mini-nav-btn" onClick={onPrevMonth}>
+          {"<"}
+        </button>
+        <span>
+          {monthStart.toLocaleDateString(language === "en" ? "en-US" : "de-AT", { month: "long", year: "numeric" })}
+        </span>
+        <button type="button" className="equity-mini-nav-btn" onClick={onNextMonth}>
+          {">"}
+        </button>
+      </div>
+      <div className="equity-mini-calendar-grid">
+        {labels.map((label) => (
+          <span key={label} className="equity-mini-calendar-weekday">
+            {label}
+          </span>
+        ))}
+        {days.map((day) => {
+          const inMonth = day.getMonth() === monthStart.getMonth();
+          const disabled = (minDate && day < startOfDay(minDate)) || (maxDate && day > startOfDay(maxDate));
+          const inRange = from && to ? day >= from && day <= to : false;
+          const isEdge = (from && sameDay(day, from)) || (to && sameDay(day, to));
+          return (
+            <button
+              key={toIsoDateString(day)}
+              type="button"
+              disabled={Boolean(disabled)}
+              className={[
+                "equity-mini-calendar-day",
+                inMonth ? "" : "outside",
+                inRange ? "in-range" : "",
+                isEdge ? "edge" : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => onPickDate(day)}
+              onMouseDown={() => onDragStartDate(day)}
+              onMouseEnter={() => onDragMoveDate(day)}
+              onMouseUp={onDragEnd}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

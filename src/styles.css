@@ -677,6 +677,110 @@ button.primary {
   flex: 0 0 auto;
 }
 
+.equity-calendar-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.equity-calendar-toggle {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #121215;
+  color: var(--text);
+  padding: 5px 8px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.equity-calendar-toggle.active {
+  border-color: #1ba650;
+}
+
+.equity-mini-calendar {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 8;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #121215;
+  padding: 8px;
+  min-width: 258px;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+}
+
+.equity-mini-calendar-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.equity-mini-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+
+.equity-mini-nav-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0f0f12;
+  color: var(--text);
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.equity-mini-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.equity-mini-calendar-weekday {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.equity-mini-calendar-day {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #0f0f12;
+  color: var(--text);
+  font-size: 11px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.equity-mini-calendar-day.outside {
+  color: #7d7d88;
+}
+
+.equity-mini-calendar-day.in-range {
+  background: rgba(27, 166, 80, 0.2);
+  border-color: rgba(27, 166, 80, 0.35);
+}
+
+.equity-mini-calendar-day.edge {
+  background: #1ba650;
+  border-color: #1ba650;
+  color: #06140a;
+  font-weight: 700;
+}
+
+.equity-mini-calendar-day:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .equity-date-chip,
 .equity-date-chip-input {
   border: 1px solid var(--border);
@@ -1649,6 +1753,16 @@ button.dashboard-link-card:hover {
 
 [data-theme="light"] .equity-reset-btn {
   background: #f3f4f8;
+}
+
+[data-theme="light"] .equity-calendar-toggle,
+[data-theme="light"] .equity-mini-calendar {
+  background: #f3f4f8;
+}
+
+[data-theme="light"] .equity-mini-calendar-day,
+[data-theme="light"] .equity-mini-nav-btn {
+  background: #ffffff;
 }
 
 [data-theme="light"] .equity-date-chip,
