@@ -1,4 +1,5 @@
-import { loadTradesFromStorage } from "../lib/storage";
+import { applyBasiswertMergeToTrades } from "../lib/basiswertCanonical";
+import { loadTradesFromStorage, saveTradesToStorage } from "../lib/storage";
 import type { Trade } from "../types/trade";
 
 export function csvEscape(value: string | number | undefined): string {
@@ -9,5 +10,7 @@ export function csvEscape(value: string | number | undefined): string {
 
 export function readInitialTrades(): Trade[] {
   const stored = loadTradesFromStorage();
-  return stored;
+  const { next, substitutions } = applyBasiswertMergeToTrades(stored);
+  if (substitutions > 0) saveTradesToStorage(next);
+  return next;
 }

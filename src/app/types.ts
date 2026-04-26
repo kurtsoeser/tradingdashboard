@@ -19,14 +19,13 @@ export interface AssetRow {
 export interface AssetMeta {
   name: string;
   category?: string;
-  tickerUs?: string;
-  tickerXetra?: string;
+  /** Ein Ticker: Kürzel (z. B. SAP) oder voll mit Börse (z. B. NYSE:JPM, NASDAQ:AAPL). */
+  ticker?: string;
   waehrung?: string;
 }
 
 export interface AssetDisplayRow extends AssetRow {
-  tickerUs?: string;
-  tickerXetra?: string;
+  ticker?: string;
   waehrung?: string;
 }
 

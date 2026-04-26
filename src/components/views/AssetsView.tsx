@@ -1,8 +1,11 @@
-import { ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Pencil, Plus, Upload } from "lucide-react";
-import type { AssetSortField } from "../../app/types";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Activity, ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Pencil, Plus, Upload } from "lucide-react";
+import type { AssetDisplayRow, AssetMeta, AssetSortField } from "../../app/types";
 import { money } from "../../lib/analytics";
-import type { AssetDisplayRow } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
+import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
+import { TradingViewLiveChart } from "../TradingViewLiveChart";
+import { EditAssetModal } from "../EditAssetModal";
 import { PageHeader } from "../PageHeader";
 
 interface AssetsViewProps {
@@ -27,6 +30,8 @@ interface AssetsViewProps {
   onExportAssetsExcel: () => void;
   onGoToNewTrade: () => void;
   financeService: AppSettings["financeService"];
+  chartTheme: "dark" | "light";
+  onSaveAssetMeta: (meta: AssetMeta, renameFrom?: string) => void;
 }
 
 export function AssetsView({
@@ -45,29 +50,55 @@ export function AssetsView({
   onExportAssetsCsv,
   onExportAssetsExcel,
   onGoToNewTrade,
-  financeService
+  financeService,
+  chartTheme,
+  onSaveAssetMeta
 }: AssetsViewProps) {
+  /** Basiswert-Zeile, für die das Live-Chart angezeigt wird (Tabellenklick, erneuter Klick schließt). */
+  const [chartAssetName, setChartAssetName] = useState<string | null>(null);
+  const chartExpandRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  const selectedChartAsset = useMemo(
+    () => (chartAssetName ? filteredAssets.find((a) => a.name === chartAssetName) ?? null : null),
+    [chartAssetName, filteredAssets]
+  );
+
+  const selectedChartTvSymbol = selectedChartAsset ? assetToTradingViewSymbol(selectedChartAsset) : null;
+
+  useEffect(() => {
+    if (!chartAssetName) return;
+    if (!filteredAssets.some((a) => a.name === chartAssetName)) {
+      setChartAssetName(null);
+    }
+  }, [filteredAssets, chartAssetName]);
+
+  useLayoutEffect(() => {
+    if (!chartAssetName) return;
+    chartExpandRowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [chartAssetName]);
+
+  const [editAsset, setEditAsset] = useState<AssetDisplayRow | null>(null);
+
+  const categoryOptionsForEdit = useMemo(() => assetCategories.filter((c) => c !== "Alle"), [assetCategories]);
+
   const toFinanceUrl = (asset: AssetDisplayRow) => {
-    const tickerUs = asset.tickerUs?.trim();
-    const tickerXetra = asset.tickerXetra?.trim();
+    const tick = asset.ticker?.trim();
     const fallback = asset.name.trim();
+    const symbol = tick?.replace(/^[^:]+:\s*/, "") || tick || fallback;
     switch (financeService) {
       case "yahoo": {
-        const symbol = tickerUs || tickerXetra || fallback;
         return `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`;
       }
       case "tradingview": {
-        const symbol = tickerUs || tickerXetra || fallback;
-        return `https://www.tradingview.com/symbols/${encodeURIComponent(symbol)}`;
+        const tv = assetToTradingViewSymbol(asset);
+        return `https://www.tradingview.com/symbols/${encodeURIComponent(tv ?? symbol)}`;
       }
       case "investing": {
-        const query = tickerUs || tickerXetra || fallback;
-        return `https://www.investing.com/search/?q=${encodeURIComponent(query)}`;
+        return `https://www.investing.com/search/?q=${encodeURIComponent(symbol)}`;
       }
       case "google":
       default: {
-        const query = tickerUs || tickerXetra || fallback;
-        return `https://www.google.com/finance/quote/${encodeURIComponent(query)}`;
+        return `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}`;
       }
     }
   };
@@ -88,6 +119,19 @@ export function AssetsView({
 
   return (
     <section className="section">
+      {editAsset && (
+        <EditAssetModal
+          key={editAsset.name}
+          asset={editAsset}
+          categoryOptions={categoryOptionsForEdit}
+          chartTheme={chartTheme}
+          onClose={() => setEditAsset(null)}
+          onSave={(meta, renameFrom) => {
+            onSaveAssetMeta(meta, renameFrom);
+            setEditAsset(null);
+          }}
+        />
+      )}
       <input
         id="assets-import-input"
         type="file"
@@ -215,7 +259,10 @@ export function AssetsView({
 
       <div className="card">
         <h3>Alle Basiswerte ({filteredAssets.length})</h3>
-        <table>
+        <p className="live-chart-table-hint">
+          Zeile anklicken — das Live-Chart klappt direkt <strong>unter der Zeile</strong> auf. Erneut auf dieselbe Zeile klicken schließt es.
+        </p>
+        <table className="assets-table-selectable">
           <thead>
             <tr>
               <th onClick={() => onToggleAssetSort("name")} className="sortable">
@@ -224,8 +271,7 @@ export function AssetsView({
               <th onClick={() => onToggleAssetSort("category")} className="sortable">
                 Kategorie{assetSortMarker("category")}
               </th>
-              <th>Ticker US</th>
-              <th>Ticker Xetra</th>
+              <th>Ticker</th>
               <th>Währung</th>
               <th onClick={() => onToggleAssetSort("tradesCount")} className="sortable">
                 # Trades{assetSortMarker("tradesCount")}
@@ -242,28 +288,60 @@ export function AssetsView({
           </thead>
           <tbody>
             {filteredAssets.map((asset) => (
-              <tr key={asset.name}>
-                <td>{asset.name}</td>
-                <td>
-                  <span className="asset-badge">{asset.category}</span>
-                </td>
-                <td>{asset.tickerUs || "-"}</td>
-                <td>{asset.tickerXetra || "-"}</td>
-                <td>{asset.waehrung || "EUR"}</td>
-                <td>{asset.tradesCount}</td>
-                <td className={asset.realizedPL >= 0 ? "positive" : "negative"}>{money(asset.realizedPL)}</td>
-                <td>{asset.openCapital > 0 ? money(asset.openCapital) : "-"}</td>
-                <td className="finance-col">
-                  <a className="secondary slim finance-link-btn icon-only" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer" title={`${financeServiceLabel} öffnen`}>
-                    <ExternalLink size={14} />
-                  </a>
-                </td>
-                <td className="action-col">
-                  <button className="icon-btn action edit" title="Bearbeiten">
-                    <Pencil size={13} />
-                  </button>
-                </td>
-              </tr>
+              <Fragment key={asset.name}>
+                <tr
+                  className={chartAssetName === asset.name ? "asset-row-chart-selected" : undefined}
+                  onClick={() => setChartAssetName((prev) => (prev === asset.name ? null : asset.name))}
+                >
+                  <td>{asset.name}</td>
+                  <td>
+                    <span className="asset-badge">{asset.category}</span>
+                  </td>
+                  <td>{asset.ticker || "-"}</td>
+                  <td>{asset.waehrung || "EUR"}</td>
+                  <td>{asset.tradesCount}</td>
+                  <td className={asset.realizedPL >= 0 ? "positive" : "negative"}>{money(asset.realizedPL)}</td>
+                  <td>{asset.openCapital > 0 ? money(asset.openCapital) : "-"}</td>
+                  <td className="finance-col" onClick={(e) => e.stopPropagation()}>
+                    <a className="secondary slim finance-link-btn icon-only" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer" title={`${financeServiceLabel} öffnen`}>
+                      <ExternalLink size={14} />
+                    </a>
+                  </td>
+                  <td className="action-col" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="icon-btn action edit" title="Bearbeiten" onClick={() => setEditAsset(asset)}>
+                      <Pencil size={13} />
+                    </button>
+                  </td>
+                </tr>
+                {chartAssetName === asset.name && (
+                  <tr ref={chartExpandRowRef} className="asset-chart-expand-row">
+                    <td colSpan={9}>
+                      <div className="asset-chart-expand-inner">
+                        <h4 className="live-chart-title asset-chart-expand-title">
+                          <Activity size={16} aria-hidden />
+                          Live-Chart
+                        </h4>
+                        <p className="live-chart-hint live-chart-hint-compact">
+                          TradingView-Einbettung (ohne API-Key). Zuverlässig: <strong>Börse + Kürzel</strong> im Ticker, z. B. <code>NYSE:TSM</code>. Ohne Doppelpunkt: <code>XETR:</code> (Xetra) bzw. US-Kürzel-Liste. <code>XETRA:</code> wird für das Widget zu <code>XETR:</code> normalisiert.
+                        </p>
+                        {selectedChartAsset && !selectedChartTvSymbol && (
+                          <p className="live-chart-empty">
+                            Für <strong>{selectedChartAsset.name}</strong> ist kein Ticker hinterlegt. Bearbeiten (Stift), Ticker speichern, dann Zeile erneut anklicken.
+                          </p>
+                        )}
+                        {selectedChartAsset && selectedChartTvSymbol && (
+                          <>
+                            <p className="live-chart-selection-label">
+                              <strong>{selectedChartAsset.name}</strong> · <code>{selectedChartTvSymbol}</code>
+                            </p>
+                            <TradingViewLiveChart symbol={selectedChartTvSymbol} theme={chartTheme} height={380} />
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

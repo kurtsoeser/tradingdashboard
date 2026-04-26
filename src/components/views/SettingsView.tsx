@@ -1,4 +1,4 @@
-import { Bell, Building2, CalendarClock, Globe2, Languages, Settings2, ShieldCheck, Wallet } from "lucide-react";
+import { Bell, Building2, CalendarClock, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Wallet } from "lucide-react";
 import { PageHeader } from "../PageHeader";
 import type { AppSettings } from "../../app/settings";
 
@@ -8,9 +8,25 @@ interface SettingsViewProps {
   onApplyTheme: (theme: "dark" | "light") => void;
   currentTheme: "dark" | "light";
   t: (key: "navSettings" | "marketStatusPulse") => string;
+  /** Einmalig fehlende Ticker aus kurierter Liste ergänzen (nur leeres Ticker-Feld). */
+  onApplyKnownTickerSuggestions?: () => void;
+  knownTickerSuggestionCount?: number;
+  /** Dubletten (z. B. Dell / Dell Technologies) per Regelwerk zusammenführen. */
+  onMergeDuplicateBasiswerte?: () => void;
+  basiswertMergePreview?: { tradeRenames: number; metaCollapses: number };
 }
 
-export function SettingsView({ settings, onSettingsChange, onApplyTheme, currentTheme, t }: SettingsViewProps) {
+export function SettingsView({
+  settings,
+  onSettingsChange,
+  onApplyTheme,
+  currentTheme,
+  t,
+  onApplyKnownTickerSuggestions,
+  knownTickerSuggestionCount,
+  onMergeDuplicateBasiswerte,
+  basiswertMergePreview
+}: SettingsViewProps) {
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     onSettingsChange({ ...settings, [key]: value });
   };
@@ -122,6 +138,44 @@ export function SettingsView({ settings, onSettingsChange, onApplyTheme, current
             </label>
           </div>
         </div>
+
+        {onApplyKnownTickerSuggestions && (
+          <div className="card settings-card">
+            <h3>
+              <Hash size={14} />
+              Basiswert-Ticker (Vorschlag)
+            </h3>
+            <p className="settings-ticker-enrich-hint">
+              Ergänzt fehlendes <strong>Ticker</strong>-Feld für deine Basiswerte aus den Trades — nur wenn der Name zu einer kuratierten Liste passt (
+              {knownTickerSuggestionCount ?? "…"} Einträge). Bereits gesetzte Ticker werden nicht überschrieben.
+            </p>
+            <button type="button" className="secondary" onClick={onApplyKnownTickerSuggestions}>
+              Bekannte Ticker jetzt übernehmen
+            </button>
+          </div>
+        )}
+
+        {onMergeDuplicateBasiswerte && (
+          <div className="card settings-card">
+            <h3>
+              <GitMerge size={14} />
+              Basiswert-Dubletten
+            </h3>
+            <p className="settings-ticker-enrich-hint">
+              Gleicht <strong>Basiswert</strong>-Namen in allen Trades an ein gemeinsames Kürzel an (z. B. „Dell“ → „Dell Technologies“, „Palantir“ →
+              „Palantir Technologies“) und führt doppelte Einträge in den gespeicherten Basiswert-Metadaten zusammen. Läuft beim App-Start automatisch; der
+              Button wendet dieselbe Logik erneut an (z. B. nach Import).
+            </p>
+            <p className="muted-help" style={{ marginTop: "0.35rem" }}>
+              Aktuell erkannt: ca.{" "}
+              <strong>{basiswertMergePreview?.tradeRenames ?? 0}</strong> Trade-Zeilen mit abweichendem Textfeld,{" "}
+              <strong>{basiswertMergePreview?.metaCollapses ?? 0}</strong> zusätzliche Meta-Zeilen pro Basiswert-Gruppe.
+            </p>
+            <button type="button" className="secondary" onClick={onMergeDuplicateBasiswerte}>
+              Dubletten jetzt zusammenführen
+            </button>
+          </div>
+        )}
 
         <div className="card settings-card">
           <h3>

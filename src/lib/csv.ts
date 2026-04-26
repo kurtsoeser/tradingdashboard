@@ -225,11 +225,19 @@ function parseAssetRows(rows: Row[]): AssetMeta[] {
     .map((raw) => toCanonRow(raw))
     .map((row) => {
       const name = pick(row, "name", "basiswert", "asset", "underlying") ?? "";
+      const tickerDirect = pick(row, "ticker", "symbol", "tv", "tradingview");
+      const tickerUs = pick(row, "tickerus", "ticker_us", "ticker us");
+      const tickerXetra = pick(row, "tickerxetra", "ticker_xetra", "ticker xetra");
+      const tickerMerged =
+        tickerDirect?.trim() ||
+        [tickerUs, tickerXetra].find((s) => s?.includes(":"))?.trim() ||
+        tickerUs?.trim() ||
+        tickerXetra?.trim() ||
+        undefined;
       return {
         name: name.trim(),
         category: pick(row, "category", "kategorie"),
-        tickerUs: pick(row, "tickerus", "ticker_us", "ticker us"),
-        tickerXetra: pick(row, "tickerxetra", "ticker_xetra", "ticker xetra"),
+        ticker: tickerMerged,
         waehrung: pick(row, "waehrung", "währung", "currency")
       } satisfies AssetMeta;
     })

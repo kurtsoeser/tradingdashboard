@@ -4,7 +4,16 @@ import type { Trade } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
 import { saveTradesToStorage } from "./lib/storage";
 import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
+import {
+  applyBasiswertMergeToTrades,
+  canonicalizeBasiswert,
+  countAssetMetaDuplicateGroups,
+  countTradeBasiswertRenames,
+  normalizeAndMergeAssetMetaList,
+  sameBasiswertBucket
+} from "./lib/basiswertCanonical";
 import { loadAssetMetaFromStorage, saveAssetMetaToStorage } from "./lib/assetsStorage";
+import { countKnownTickerKeys, enrichAssetMetaFromKnownTickers } from "./lib/enrichAssetMetaFromKnownTickers";
 import { daysBetween, getCalendarMonthLabel, getNowLocalDateTimeValue, getWeekdayNames, parseStoredDateTime, setDateDisplayConfig, toDisplayDateTime, toLocalInputValue } from "./app/date";
 import { csvEscape, readInitialTrades } from "./app/helpers";
 import { buildAnalyticsData, buildAssetRows, buildDashboardMonthlyStats, buildDashboardTopFlop } from "./app/derive";
@@ -19,6 +28,7 @@ import { SettingsView } from "./components/views/SettingsView";
 import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
 import { setMoneyFormat } from "./lib/analytics";
 import { t } from "./app/i18n";
+import { normalizeBasiswertKey } from "./data/knownAssetTickers";
 
 export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
@@ -229,6 +239,14 @@ export default function App() {
   }, [baseFilteredTrades, calendarMonth]);
 
   const assetRows = useMemo(() => buildAssetRows(trades), [trades]);
+  const basiswertMergePreview = useMemo(
+    () => ({
+      tradeRenames: countTradeBasiswertRenames(trades),
+      metaCollapses: countAssetMetaDuplicateGroups(assetMeta)
+    }),
+    [trades, assetMeta]
+  );
+
   const assetRowsWithMeta = useMemo(() => {
     const byName = new Map(assetRows.map((row) => [row.name.toLowerCase(), row]));
     const merged = assetRows.map((row) => {
@@ -236,8 +254,7 @@ export default function App() {
       return {
         ...row,
         category: meta?.category || row.category,
-        tickerUs: meta?.tickerUs,
-        tickerXetra: meta?.tickerXetra,
+        ticker: meta?.ticker,
         waehrung: meta?.waehrung
       };
     });
@@ -250,8 +267,7 @@ export default function App() {
         realizedPL: 0,
         openCapital: 0,
         hasOpen: false,
-        tickerUs: item.tickerUs,
-        tickerXetra: item.tickerXetra,
+        ticker: item.ticker,
         waehrung: item.waehrung
       }));
     return [...merged, ...additional];
@@ -314,8 +330,9 @@ export default function App() {
       window.alert("Keine gültigen Trades gefunden. Bitte Vorlage und Spalten prüfen.");
       return;
     }
-    setTrades(rows);
-    saveTradesToStorage(rows);
+    const merged = applyBasiswertMergeToTrades(rows).next;
+    setTrades(merged);
+    saveTradesToStorage(merged);
   };
 
   const templateHeader = [
@@ -365,10 +382,10 @@ export default function App() {
     XLSX.writeFile(workbook, "trades-import-vorlage.xlsx");
   };
 
-  const assetTemplateHeader = ["name", "category", "tickerUs", "tickerXetra", "währung"];
+  const assetTemplateHeader = ["name", "category", "ticker", "währung"];
   const assetTemplateRows: Array<Array<string>> = [
-    ["AAPL", "Aktie", "AAPL", "APC", "USD"],
-    ["BTCUSD", "Krypto", "BTC-USD", "", "USD"]
+    ["AAPL", "Aktie", "NASDAQ:AAPL", "USD"],
+    ["BTCUSD", "Krypto", "BINANCE:BTCUSDT", "USD"]
   ];
 
   const importAssetsFile = async (file: File) => {
@@ -379,8 +396,69 @@ export default function App() {
       window.alert("Keine gültigen Basiswerte gefunden. Bitte Vorlage und Spalten prüfen.");
       return;
     }
-    setAssetMeta(rows);
-    saveAssetMetaToStorage(rows);
+    const merged = normalizeAndMergeAssetMetaList(rows).next;
+    setAssetMeta(merged);
+    saveAssetMetaToStorage(merged);
+  };
+
+  const saveAssetMetaPatch = (patch: AssetMeta, renameFrom?: string) => {
+    const canon = canonicalizeBasiswert(patch.name.trim());
+    if (!canon) {
+      window.alert("Der Basiswert-Name darf nicht leer sein.");
+      return;
+    }
+    const patchNorm: AssetMeta = { ...patch, name: canon };
+    const renameTrim = renameFrom?.trim() ?? "";
+    const doingRename = Boolean(renameTrim && !sameBasiswertBucket(renameTrim, canon));
+
+    if (doingRename) {
+      setTrades((prev) => {
+        const next = prev.map((t) =>
+          sameBasiswertBucket(t.basiswert, renameTrim) ? { ...t, basiswert: canon } : t
+        );
+        saveTradesToStorage(next);
+        return next;
+      });
+    }
+
+    setAssetMeta((prev) => {
+      const i = doingRename
+        ? prev.findIndex((m) => sameBasiswertBucket(m.name, renameTrim))
+        : prev.findIndex((m) => sameBasiswertBucket(m.name, canon));
+      const merged: AssetMeta =
+        i >= 0
+          ? {
+              ...prev[i],
+              ...patchNorm,
+              name: canon
+            }
+          : { ...patchNorm };
+      const next = i >= 0 ? prev.map((m, idx) => (idx === i ? merged : m)) : [...prev, merged];
+      const deduped = normalizeAndMergeAssetMetaList(next).next;
+      saveAssetMetaToStorage(deduped);
+      return deduped;
+    });
+  };
+
+  const runMergeDuplicateBasiswerte = () => {
+    const { next: nextTrades, substitutions } = applyBasiswertMergeToTrades(trades);
+    const { next: nextMeta, mergedPairs } = normalizeAndMergeAssetMetaList(assetMeta);
+    setTrades(nextTrades);
+    setAssetMeta(nextMeta);
+    saveTradesToStorage(nextTrades);
+    saveAssetMetaToStorage(nextMeta);
+    window.alert(
+      `Basiswerte zusammengeführt.\n\nTrades mit angepasstem Basiswert-Feld: ${substitutions}\nZusammengeführte Basiswert-Meta-Zeilen: ${mergedPairs}\n\nTipp: Vor größeren Bereinigungen einmal JSON/CSV exportieren.`
+    );
+  };
+
+  const applyKnownTickerSuggestions = () => {
+    const { nextMeta, applied, stillWithoutChartSymbol } = enrichAssetMetaFromKnownTickers(trades, assetMeta);
+    setAssetMeta(nextMeta);
+    saveAssetMetaToStorage(nextMeta);
+    window.alert(
+      `Fertig.\n\nÜbernommen (${applied.length}): ${applied.join(", ") || "—"}\n\nWeiterhin ohne Chart-Ticker bzw. keine Zuordnung in der Liste (${stillWithoutChartSymbol.length}):\n${stillWithoutChartSymbol.join(", ") || "—"}\n\nBereits gesetzte Ticker wurden nicht überschrieben. Namen wie in der Liste (z. B. „SAP SE“) helfen — sonst Ticker im Bearbeiten-Dialog oder per Import setzen.`
+    );
   };
 
   const downloadAssetTemplateCsv = () => {
@@ -403,12 +481,11 @@ export default function App() {
   };
 
   const exportAssetsCsv = () => {
-    const header = ["name", "category", "tickerUs", "tickerXetra", "währung", "tradesCount", "realizedPL", "openCapital"];
+    const header = ["name", "category", "ticker", "währung", "tradesCount", "realizedPL", "openCapital"];
     const rows = assetRowsWithMeta.map((asset) => [
       asset.name,
       asset.category,
-      asset.tickerUs ?? "",
-      asset.tickerXetra ?? "",
+      asset.ticker ?? "",
       asset.waehrung ?? "EUR",
       asset.tradesCount,
       asset.realizedPL,
@@ -426,12 +503,11 @@ export default function App() {
   };
 
   const exportAssetsExcel = () => {
-    const header = ["name", "category", "tickerUs", "tickerXetra", "währung", "tradesCount", "realizedPL", "openCapital"];
+    const header = ["name", "category", "ticker", "währung", "tradesCount", "realizedPL", "openCapital"];
     const rows = assetRowsWithMeta.map((asset) => [
       asset.name,
       asset.category,
-      asset.tickerUs ?? "",
-      asset.tickerXetra ?? "",
+      asset.ticker ?? "",
       asset.waehrung ?? "EUR",
       asset.tradesCount,
       asset.realizedPL,
@@ -472,7 +548,7 @@ export default function App() {
       id: editingTradeId ?? `trade-${Date.now()}`,
       name: form.name.trim(),
       typ: form.typ,
-      basiswert: form.basiswert.trim(),
+      basiswert: canonicalizeBasiswert(form.basiswert.trim()),
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
       kaufPreis,
@@ -795,6 +871,8 @@ export default function App() {
             onExportAssetsExcel={exportAssetsExcel}
             onGoToNewTrade={startNewTrade}
             financeService={appSettings.financeService}
+            chartTheme={theme}
+            onSaveAssetMeta={saveAssetMetaPatch}
           />
         )}
         {view === "analytics" && analyticsData && (
@@ -807,7 +885,17 @@ export default function App() {
           />
         )}
         {view === "settings" && (
-          <SettingsView settings={appSettings ?? defaultAppSettings} onSettingsChange={setAppSettings} onApplyTheme={setTheme} currentTheme={theme} t={(key) => t(appSettings.language, key)} />
+          <SettingsView
+            settings={appSettings ?? defaultAppSettings}
+            onSettingsChange={setAppSettings}
+            onApplyTheme={setTheme}
+            currentTheme={theme}
+            t={(key) => t(appSettings.language, key)}
+            onApplyKnownTickerSuggestions={applyKnownTickerSuggestions}
+            knownTickerSuggestionCount={countKnownTickerKeys()}
+            onMergeDuplicateBasiswerte={runMergeDuplicateBasiswerte}
+            basiswertMergePreview={basiswertMergePreview}
+          />
         )}
       </main>
     </div>
