@@ -1,4 +1,4 @@
-export type StartView = "dashboard" | "trades" | "assets" | "analytics";
+export type StartView = "dashboard" | "trades" | "assets" | "analytics" | "journal";
 
 export interface AppSettings {
   currency: "EUR" | "USD" | "CHF" | "GBP";

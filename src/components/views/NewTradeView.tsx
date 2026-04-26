@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, FileText, HandCoins, Landmark, Tags, TrendingUp } from "lucide-react";
 import { formatMonthLabel, getNowLocalDateTimeValue, parseStoredDateTime } from "../../app/date";
+import { t } from "../../app/i18n";
 import type { AssetDisplayRow, AssetMeta, NewTradeForm, TradeFormType } from "../../app/types";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import { canonicalizeBasiswert, sameBasiswertBucket } from "../../lib/basiswertCanonical";
 import { lookupKnownTickerSuggestion } from "../../data/knownAssetTickers";
 import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
+import type { AppSettings } from "../../app/settings";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
 
 interface NewTradeViewProps {
   editingTradeId: string | null;
+  language: AppSettings["language"];
   trades: Trade[];
   assetMeta: AssetMeta[];
   chartTheme: "dark" | "light";
@@ -29,6 +32,7 @@ interface NewTradeViewProps {
 
 export function NewTradeView({
   editingTradeId,
+  language,
   trades,
   assetMeta,
   chartTheme,
@@ -265,12 +269,12 @@ export function NewTradeView({
   return (
     <section className="section new-trade">
       <PageHeader
-        title={editingTradeId ? "Trade bearbeiten" : "Neuer Trade"}
-        subtitle={editingTradeId ? "Bearbeite den ausgewählten Trade" : "Erfasse einen neuen Trade"}
+        title={editingTradeId ? t(language, "editTradeTitle") : t(language, "newTradeTitle")}
+        subtitle={editingTradeId ? t(language, "editTradeSubtitle") : t(language, "newTradeSubtitle")}
         actions={
           <button className="secondary" onClick={onSetViewTrades}>
             <CandlestickChart size={14} />
-            Zu Trades
+            {t(language, "toTrades")}
           </button>
         }
       />
@@ -278,20 +282,20 @@ export function NewTradeView({
       <div className="new-trade-grid">
         <div className="card form-card card-span-2">
           <div className="card-title-row">
-            <h3>Grunddaten</h3>
+            <h3>{t(language, "basics")}</h3>
             <Tags size={20} className="card-title-icon" />
           </div>
           <div className="form-grid">
             <label>
-              <span className="field-title">Name *</span>
+              <span className="field-title">{t(language, "nameRequired")}</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="z.B. Gold - Long 4500"
+                placeholder={t(language, "placeholderName")}
               />
             </label>
             <label>
-              <span className="field-title">Typ *</span>
+              <span className="field-title">{t(language, "typeRequired")}</span>
               <select value={form.typ} onChange={(e) => setForm((prev) => ({ ...prev, typ: e.target.value as TradeFormType }))}>
                 <option value="Long">Long</option>
                 <option value="Short">Short</option>
@@ -305,31 +309,31 @@ export function NewTradeView({
               </select>
             </label>
             <label>
-              <span className="field-title">Basiswert *</span>
+              <span className="field-title">{t(language, "basiswertRequired")}</span>
               <input
                 value={form.basiswert}
                 onChange={(e) => setForm((prev) => ({ ...prev, basiswert: e.target.value }))}
-                placeholder="z.B. Gold, Microsoft"
+                placeholder={t(language, "placeholderBasiswert")}
               />
             </label>
             <label>
-              <span className="field-title">Status (automatisch)</span>
-              <input value={statusClosed ? "Geschlossen" : "Offen"} disabled />
+              <span className="field-title">{t(language, "statusAuto")}</span>
+              <input value={statusClosed ? t(language, "closed") : t(language, "open")} disabled />
             </label>
           </div>
         </div>
 
         <div className="card form-card notes-card new-trade-notes-card card-span-1">
           <div className="card-title-row">
-            <h3>Notizen</h3>
+            <h3>{t(language, "notes")}</h3>
             <FileText size={20} className="card-title-icon" />
           </div>
           <label className="notes-label">
-            <span className="field-title">Kommentar / Notizen</span>
+            <span className="field-title">{t(language, "notesField")}</span>
             <textarea
               value={form.notiz}
               onChange={(e) => setForm((prev) => ({ ...prev, notiz: e.target.value }))}
-              placeholder="Hier kannst du Gedanken, Setup, Regeln oder Beobachtungen zum Trade notieren..."
+              placeholder={t(language, "notesPlaceholder")}
             />
           </label>
         </div>
@@ -339,12 +343,11 @@ export function NewTradeView({
             <div className="card-title-row">
               <h3>
                 <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
-                Live-Chart (Basiswert)
+                {t(language, "liveChartBasis")}
               </h3>
             </div>
             <p className="live-chart-hint live-chart-hint-compact">
-              Vorschau aus gespeichertem Ticker oder bekannter Zuordnung für <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> —{" "}
-              <code>{basiswertLiveTvSymbol}</code>
+              {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basiswertLiveTvSymbol}</code>
             </p>
             <TradingViewLiveChart symbol={basiswertLiveTvSymbol} theme={chartTheme} height={340} />
           </div>
@@ -352,12 +355,12 @@ export function NewTradeView({
 
         <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
-            <h3>Kaufdaten</h3>
+            <h3>{t(language, "buyData")}</h3>
             <Landmark size={20} className="card-title-icon" />
           </div>
           <div className="form-grid trade-row-grid">
             <label className="field-span-full">
-              <span className="field-title">Kaufzeitpunkt *</span>
+              <span className="field-title">{t(language, "buyTime")}</span>
               <div className="date-input-row">
                 <input
                   type="text"
@@ -370,12 +373,12 @@ export function NewTradeView({
                       commitKaufzeitpunktDisplay();
                     }
                   }}
-                  placeholder="TT.MM.JJJJ HH:mm"
+                  placeholder={t(language, "datePlaceholder")}
                 />
                 <button
                   type="button"
                   className="icon-btn"
-                  title="Aktuelle Zeit übernehmen"
+                  title={t(language, "useNow")}
                   onClick={() => {
                     const nowValue = getNowLocalDateTimeValue();
                     setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
@@ -387,7 +390,7 @@ export function NewTradeView({
               </div>
             </label>
             <label className="field-span-full">
-              <span className="field-title">Transaktion (Stück x Stückpreis)</span>
+              <span className="field-title">{t(language, "txQtyPrice")}</span>
               <div className="formula-row">
                 <input
                   type="number"
@@ -395,7 +398,7 @@ export function NewTradeView({
                   min="0"
                   value={form.stueck}
                   onChange={(e) => handleStueckChange(e.target.value)}
-                  placeholder="Anzahl"
+                  placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
                 <input
@@ -404,7 +407,7 @@ export function NewTradeView({
                   min="0"
                   value={form.kaufStueckpreis}
                   onChange={(e) => setForm((prev) => ({ ...prev, kaufStueckpreis: e.target.value, kaufTransaktionManuell: "" }))}
-                  placeholder="Stückpreis"
+                  placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
                 <input
@@ -428,7 +431,7 @@ export function NewTradeView({
               </div>
             </label>
             <label className="field-span-full calc-right-row">
-              <span className="field-title">Gebühren (Kauf)</span>
+              <span className="field-title">{t(language, "feesBuy")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -442,7 +445,7 @@ export function NewTradeView({
           <div className="calc-footer">
             <div className="calc-separator" aria-hidden="true" />
             <label className="calc-right-row">
-              <span className="field-title">Kaufpreis (EUR)</span>
+              <span className="field-title">{t(language, "buyPriceEur")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -456,12 +459,12 @@ export function NewTradeView({
 
         <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
-            <h3>Verkaufsdaten</h3>
+            <h3>{t(language, "sellData")}</h3>
             <ChartCandlestick size={20} className="card-title-icon" />
           </div>
           <div className="form-grid trade-row-grid">
             <label className="field-span-full">
-              <span className="field-title">Verkaufszeitpunkt</span>
+              <span className="field-title">{t(language, "sellTime")}</span>
               <div className="date-input-row">
                 <input
                   type="text"
@@ -474,12 +477,12 @@ export function NewTradeView({
                       commitVerkaufszeitpunktDisplay();
                     }
                   }}
-                  placeholder="TT.MM.JJJJ HH:mm"
+                  placeholder={t(language, "datePlaceholder")}
                 />
                 <button
                   type="button"
                   className="icon-btn"
-                  title="Aktuelle Zeit übernehmen"
+                  title={t(language, "useNow")}
                   onClick={() => {
                     const nowValue = getNowLocalDateTimeValue();
                     setForm((prev) => ({ ...prev, verkaufszeitpunkt: nowValue }));
@@ -491,7 +494,7 @@ export function NewTradeView({
               </div>
             </label>
             <label className="field-span-full">
-              <span className="field-title">Transaktion (Stück x Stückpreis)</span>
+              <span className="field-title">{t(language, "txQtyPrice")}</span>
               <div className="formula-row">
                 <input
                   type="number"
@@ -499,7 +502,7 @@ export function NewTradeView({
                   min="0"
                   value={form.stueck}
                   onChange={(e) => handleStueckChange(e.target.value)}
-                  placeholder="Anzahl"
+                  placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
                 <input
@@ -508,7 +511,7 @@ export function NewTradeView({
                   min="0"
                   value={form.verkaufStueckpreis}
                   onChange={(e) => setForm((prev) => ({ ...prev, verkaufStueckpreis: e.target.value, verkaufTransaktionManuell: "" }))}
-                  placeholder="Stückpreis"
+                  placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
                 <input
@@ -532,7 +535,7 @@ export function NewTradeView({
               </div>
             </label>
             <label className="field-span-full calc-right-row">
-              <span className="field-title">Gebühren (Verkauf)</span>
+              <span className="field-title">{t(language, "feesSell")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -543,7 +546,7 @@ export function NewTradeView({
             </label>
             <div className="field-spacer field-span-full" aria-hidden="true" />
             <label className="field-span-full calc-right-row tax-row">
-              <span className="field-title">Steuer (Standard 27,5% vom Erlös)</span>
+              <span className="field-title">{t(language, "taxDefault")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -556,7 +559,7 @@ export function NewTradeView({
           <div className="calc-footer">
             <div className="calc-separator" aria-hidden="true" />
             <label className="calc-right-row">
-              <span className="field-title">Verkaufserlös (EUR)</span>
+              <span className="field-title">{t(language, "sellProceedsEur")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -573,20 +576,20 @@ export function NewTradeView({
           style={{ "--result-tint-strength": `${resultTintStrength}` } as React.CSSProperties}
         >
           <div className="card-title-row">
-            <h3>Ergebnis</h3>
+            <h3>{t(language, "result")}</h3>
             <HandCoins size={20} className="card-title-icon" />
           </div>
           <div className="form-grid">
             <label>
-              <span className="field-title">Gewinn (EUR)</span>
+              <span className="field-title">{t(language, "profitEur")}</span>
               <input value={money(gewinn)} disabled />
             </label>
             <label>
-              <span className="field-title">Rendite (%)</span>
+              <span className="field-title">{t(language, "returnPct")}</span>
               <input value={`${rendite.toFixed(2)}%`} disabled />
             </label>
             <label>
-              <span className="field-title">Haltedauer (Tage)</span>
+              <span className="field-title">{t(language, "holdDays")}</span>
               <input value={`${haltedauer}`} disabled />
             </label>
           </div>
@@ -595,41 +598,41 @@ export function NewTradeView({
         <div className="card form-card asset-history-card card-span-1">
           <div className="asset-history-title-row">
             <h3>
-              Historie Basiswert
+              {t(language, "assetHistory")}
             </h3>
             <TrendingUp size={20} className="card-title-icon" />
           </div>
           <div className="asset-history-subtitle">
-            <span>{basiswertStats?.basiswertLabel || "Bitte Basiswert wählen"}</span>
+            <span>{basiswertStats?.basiswertLabel || t(language, "pickBasiswert")}</span>
           </div>
 
           {!basiswertStats ? (
-            <p className="asset-history-empty">Gib einen Basiswert ein, um historische Kennzahlen zu sehen.</p>
+            <p className="asset-history-empty">{t(language, "enterBasiswertHint")}</p>
           ) : (
             <>
               <div className="asset-history-kpis">
                 <div>
-                  <small>Trades</small>
+                  <small>{t(language, "tradesCountSmall")}</small>
                   <strong>{basiswertStats.totalTrades}</strong>
                 </div>
                 <div>
-                  <small>Geschlossen</small>
+                  <small>{t(language, "closed")}</small>
                   <strong>{basiswertStats.closedTrades}</strong>
                 </div>
                 <div>
-                  <small>Offen</small>
+                  <small>{t(language, "open")}</small>
                   <strong>{basiswertStats.offeneTrades}</strong>
                 </div>
                 <div>
-                  <small>Trefferquote</small>
+                  <small>{t(language, "hitRate")}</small>
                   <strong>{basiswertStats.winRate.toFixed(1)}%</strong>
                 </div>
                 <div>
-                  <small>Avg P&L</small>
+                  <small>{t(language, "avgPL")}</small>
                   <strong className={basiswertStats.avgPL >= 0 ? "positive" : "negative"}>{money(basiswertStats.avgPL)}</strong>
                 </div>
                 <div>
-                  <small>Gesamt P&L</small>
+                  <small>{t(language, "totalPLSmall")}</small>
                   <strong className={basiswertStats.totalPL >= 0 ? "positive" : "negative"}>{money(basiswertStats.totalPL)}</strong>
                 </div>
               </div>
@@ -637,7 +640,7 @@ export function NewTradeView({
               <div className="asset-history-chart-block">
                 <h4>
                   <BarChart3 size={13} />
-                  Laufender P&L (letzte 10 geschlossene Trades)
+                  {t(language, "runningPLChart")}
                 </h4>
                 {renderMiniBars(basiswertStats.perfSeries, "pl")}
               </div>
@@ -645,7 +648,7 @@ export function NewTradeView({
               <div className="asset-history-chart-block">
                 <h4>
                   <BarChart3 size={13} />
-                  Monats-P&L (letzte 6 Monate)
+                  {t(language, "monthlyPL6")}
                 </h4>
                 {renderMiniBars(basiswertStats.monthlySeries, "pl")}
               </div>
@@ -655,20 +658,20 @@ export function NewTradeView({
 
         <div className="card form-card card-span-1">
           <div className="card-title-row">
-            <h3>Preis-Szenario</h3>
+            <h3>{t(language, "priceScenario")}</h3>
             <Activity size={20} className="card-title-icon" />
           </div>
           <p className="asset-history-empty">
-            Simulierter P&L bei Kursveränderungen relativ zum Kaufpreis
-            {Number.parseFloat(form.stueck) > 0 ? ` mit ${form.stueck} Stück.` : " pro 1 Stück."}
+            {t(language, "priceScenarioHint")}
+            {Number.parseFloat(form.stueck) > 0 ? t(language, "withPieces", { n: form.stueck }) : t(language, "perUnit")}
           </p>
           {preisSzenario.length === 0 ? (
-            <p className="asset-history-empty">Bitte zuerst einen Kaufpreis eintragen.</p>
+            <p className="asset-history-empty">{t(language, "enterBuyFirst")}</p>
           ) : (
             <div className="asset-history-chart-block">
               <h4>
                 <BarChart3 size={13} />
-                Veränderung vs. Kaufpreis
+                {t(language, "changeVsBuy")}
               </h4>
               {renderMiniBars(preisSzenario, "pl")}
             </div>
@@ -678,7 +681,7 @@ export function NewTradeView({
 
       <div className="new-trade-actions">
         <button className="primary" onClick={onSaveNewTrade}>
-          {editingTradeId ? "Änderungen speichern" : "Speichern"}
+          {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
         </button>
         <button
           className="secondary"
@@ -687,7 +690,7 @@ export function NewTradeView({
             onCancelEdit();
           }}
         >
-          Abbrechen
+          {t(language, "cancel")}
         </button>
       </div>
     </section>

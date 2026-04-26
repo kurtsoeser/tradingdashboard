@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Activity, ChevronDown, Database, ExternalLink, FileDown, FileSpreadsheet, Pencil, Plus, Upload } from "lucide-react";
+import { t } from "../../app/i18n";
 import type { AssetDisplayRow, AssetMeta, AssetSortField } from "../../app/types";
 import { money } from "../../lib/analytics";
 import type { AppSettings } from "../../app/settings";
@@ -9,6 +10,7 @@ import { EditAssetModal } from "../EditAssetModal";
 import { PageHeader } from "../PageHeader";
 
 interface AssetsViewProps {
+  language: AppSettings["language"];
   assetSummary: {
     totalAssets: number;
     withOpen: number;
@@ -35,6 +37,7 @@ interface AssetsViewProps {
 }
 
 export function AssetsView({
+  language,
   assetSummary,
   assetSearch,
   onAssetSearchChange,
@@ -123,6 +126,7 @@ export function AssetsView({
         <EditAssetModal
           key={editAsset.name}
           asset={editAsset}
+          language={language}
           categoryOptions={categoryOptionsForEdit}
           chartTheme={chartTheme}
           onClose={() => setEditAsset(null)}
@@ -146,68 +150,68 @@ export function AssetsView({
         title={
           <>
             <Database size={18} />
-            Basiswerte / Assets
+            {t(language, "assetsPageTitle")}
           </>
         }
-        subtitle="Alle in den Daten vorhandenen Basiswerte mit Kennzahlen"
+        subtitle={t(language, "assetsPageSubtitle")}
         actions={
           <>
             <details className="actions-dropdown">
               <summary className="secondary">
                 <FileDown size={14} />
-                Import
+                {t(language, "import")}
                 <ChevronDown size={14} />
               </summary>
               <div className="actions-dropdown-menu">
                 <label htmlFor="assets-import-input" className="actions-dropdown-item file-pick-btn">
                   <span className="actions-dropdown-item-content">
                     <Upload size={14} />
-                    Datei importieren
+                    {t(language, "importFile")}
                   </span>
-                  <small>CSV oder Excel Datei laden</small>
+                  <small>{t(language, "importFileHint")}</small>
                 </label>
                 <button className="actions-dropdown-item" onClick={onDownloadAssetTemplateCsv}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Vorlage CSV herunterladen
+                    {t(language, "templateCsv")}
                   </span>
-                  <small>Beispielspalten für CSV</small>
+                  <small>{t(language, "templateCsvHint")}</small>
                 </button>
                 <button className="actions-dropdown-item" onClick={onDownloadAssetTemplateExcel}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Vorlage Excel herunterladen
+                    {t(language, "templateExcel")}
                   </span>
-                  <small>Beispielspalten für Excel</small>
+                  <small>{t(language, "templateExcelHint")}</small>
                 </button>
               </div>
             </details>
             <details className="actions-dropdown">
               <summary className="secondary">
                 <FileDown size={14} />
-                Export
+                {t(language, "export")}
                 <ChevronDown size={14} />
               </summary>
               <div className="actions-dropdown-menu">
                 <button className="actions-dropdown-item" onClick={onExportAssetsCsv}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Basiswerte als CSV exportieren
+                    {t(language, "assetsExportCsv")}
                   </span>
-                  <small>Mit Kennzahlen und Tickern</small>
+                  <small>{t(language, "assetsExportCsvHint")}</small>
                 </button>
                 <button className="actions-dropdown-item" onClick={onExportAssetsExcel}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Basiswerte als Excel exportieren
+                    {t(language, "assetsExportExcel")}
                   </span>
-                  <small>Mit Kennzahlen und Tickern</small>
+                  <small>{t(language, "assetsExportExcelHint")}</small>
                 </button>
               </div>
             </details>
             <button className="primary" onClick={onGoToNewTrade}>
               <Plus size={14} />
-              Neuer Basiswert
+              {t(language, "newAsset")}
             </button>
           </>
         }
@@ -215,19 +219,19 @@ export function AssetsView({
 
       <div className="trades-summary-grid">
         <div className="card">
-          <h3>Basiswerte gesamt</h3>
+          <h3>{t(language, "assetsTotal")}</h3>
           <div className="value">{assetSummary.totalAssets}</div>
         </div>
         <div className="card">
-          <h3>Mit offenen Positionen</h3>
+          <h3>{t(language, "assetsWithOpen")}</h3>
           <div className="value">{assetSummary.withOpen}</div>
         </div>
         <div className="card">
-          <h3>Realisierter P&L</h3>
+          <h3>{t(language, "realizedPL")}</h3>
           <div className={`value ${assetSummary.totalPL >= 0 ? "positive" : "negative"}`}>{money(assetSummary.totalPL)}</div>
         </div>
         <div className="card assets-category-card">
-          <h3>Nach Kategorie</h3>
+          <h3>{t(language, "byCategory")}</h3>
           <div className="assets-category-tags">
             {Object.entries(assetSummary.categoryCount).map(([category, count]) => (
               <span key={category}>
@@ -241,11 +245,11 @@ export function AssetsView({
       <div className="card trades-filters-card">
         <div className="assets-filters-grid">
           <label>
-            Suche
-            <input value={assetSearch} onChange={(event) => onAssetSearchChange(event.target.value)} placeholder="Suche nach Name oder Ticker..." />
+            {t(language, "search")}
+            <input value={assetSearch} onChange={(event) => onAssetSearchChange(event.target.value)} placeholder={t(language, "assetSearchPlaceholder")} />
           </label>
           <label>
-            Kategorie
+            {t(language, "category")}
             <select value={assetCategoryFilter} onChange={(event) => onAssetCategoryFilterChange(event.target.value)}>
               {assetCategories.map((category) => (
                 <option key={category} value={category}>
@@ -258,32 +262,35 @@ export function AssetsView({
       </div>
 
       <div className="card">
-        <h3>Alle Basiswerte ({filteredAssets.length})</h3>
-        <p className="live-chart-table-hint">
-          Zeile anklicken — das Live-Chart klappt direkt <strong>unter der Zeile</strong> auf. Erneut auf dieselbe Zeile klicken schließt es.
-        </p>
+        <h3>{t(language, "allAssetsTitle", { n: filteredAssets.length })}</h3>
+        <p className="live-chart-table-hint">{t(language, "assetsRowHint")}</p>
         <table className="assets-table-selectable">
           <thead>
             <tr>
               <th onClick={() => onToggleAssetSort("name")} className="sortable">
-                Name{assetSortMarker("name")}
+                {t(language, "name")}
+                {assetSortMarker("name")}
               </th>
               <th onClick={() => onToggleAssetSort("category")} className="sortable">
-                Kategorie{assetSortMarker("category")}
+                {t(language, "category")}
+                {assetSortMarker("category")}
               </th>
               <th>Ticker</th>
-              <th>Währung</th>
+              <th>{t(language, "currencyCol")}</th>
               <th onClick={() => onToggleAssetSort("tradesCount")} className="sortable">
-                # Trades{assetSortMarker("tradesCount")}
+                {t(language, "hashTrades")}
+                {assetSortMarker("tradesCount")}
               </th>
               <th onClick={() => onToggleAssetSort("realizedPL")} className="sortable">
-                Realisierter P&L{assetSortMarker("realizedPL")}
+                {t(language, "realizedPL")}
+                {assetSortMarker("realizedPL")}
               </th>
               <th onClick={() => onToggleAssetSort("openCapital")} className="sortable">
-                Offenes Kapital{assetSortMarker("openCapital")}
+                {t(language, "openCapital")}
+                {assetSortMarker("openCapital")}
               </th>
               <th className="finance-col">{financeServiceLabel}</th>
-              <th className="action-col">Aktion</th>
+              <th className="action-col">{t(language, "action")}</th>
             </tr>
           </thead>
           <tbody>
@@ -303,12 +310,18 @@ export function AssetsView({
                   <td className={asset.realizedPL >= 0 ? "positive" : "negative"}>{money(asset.realizedPL)}</td>
                   <td>{asset.openCapital > 0 ? money(asset.openCapital) : "-"}</td>
                   <td className="finance-col" onClick={(e) => e.stopPropagation()}>
-                    <a className="secondary slim finance-link-btn icon-only" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer" title={`${financeServiceLabel} öffnen`}>
+                    <a
+                      className="secondary slim finance-link-btn icon-only"
+                      href={toFinanceUrl(asset)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={t(language, "financeOpen", { svc: financeServiceLabel })}
+                    >
                       <ExternalLink size={14} />
                     </a>
                   </td>
                   <td className="action-col" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="icon-btn action edit" title="Bearbeiten" onClick={() => setEditAsset(asset)}>
+                    <button type="button" className="icon-btn action edit" title={t(language, "edit")} onClick={() => setEditAsset(asset)}>
                       <Pencil size={13} />
                     </button>
                   </td>
@@ -319,15 +332,11 @@ export function AssetsView({
                       <div className="asset-chart-expand-inner">
                         <h4 className="live-chart-title asset-chart-expand-title">
                           <Activity size={16} aria-hidden />
-                          Live-Chart
+                          {t(language, "liveChart")}
                         </h4>
-                        <p className="live-chart-hint live-chart-hint-compact">
-                          TradingView-Einbettung (ohne API-Key). Zuverlässig: <strong>Börse + Kürzel</strong> im Ticker, z. B. <code>NYSE:TSM</code>. Ohne Doppelpunkt: <code>XETR:</code> (Xetra) bzw. US-Kürzel-Liste. <code>XETRA:</code> wird für das Widget zu <code>XETR:</code> normalisiert.
-                        </p>
+                        <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveChartHint")}</p>
                         {selectedChartAsset && !selectedChartTvSymbol && (
-                          <p className="live-chart-empty">
-                            Für <strong>{selectedChartAsset.name}</strong> ist kein Ticker hinterlegt. Bearbeiten (Stift), Ticker speichern, dann Zeile erneut anklicken.
-                          </p>
+                          <p className="live-chart-empty">{t(language, "noTickerHint", { name: selectedChartAsset.name })}</p>
                         )}
                         {selectedChartAsset && selectedChartTvSymbol && (
                           <>

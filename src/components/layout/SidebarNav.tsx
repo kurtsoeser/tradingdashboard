@@ -1,4 +1,4 @@
-import { BarChart3, CandlestickChart, Database, LayoutDashboard, Moon, Settings2, Sun } from "lucide-react";
+import { BarChart3, BookMarked, CandlestickChart, Database, LayoutDashboard, Moon, Settings2, Sun } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { View } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
@@ -32,14 +32,14 @@ export function SidebarNav({
   return (
     <>
       <div className="mobile-nav-header">
-        <button className="secondary mobile-menu-toggle" onClick={onToggleMobileMenu} aria-expanded={mobileMenuOpen} aria-label="Menü öffnen">
+        <button className="secondary mobile-menu-toggle" onClick={onToggleMobileMenu} aria-expanded={mobileMenuOpen} aria-label={t(language, "ariaOpenMenu")}>
           <LayoutDashboard size={16} />
-          Menü
+          {t(language, "menu")}
         </button>
         <div className="mobile-nav-brand">Trading Dashboard</div>
       </div>
 
-      {mobileMenuOpen && <button className="mobile-menu-backdrop" onClick={onCloseMobileMenu} aria-label="Menü schließen" />}
+      {mobileMenuOpen && <button className="mobile-menu-backdrop" onClick={onCloseMobileMenu} aria-label={t(language, "ariaCloseMenu")} />}
 
       <aside className={`sidebar ${mobileMenuOpen ? "is-open" : ""}`}>
         <div className="brand">Trading Dashboard</div>
@@ -59,6 +59,10 @@ export function SidebarNav({
           <button className={view === "analytics" ? "active" : ""} onClick={() => handleViewChange("analytics")}>
             <BarChart3 size={15} />
             {t(language, "navAnalytics")}
+          </button>
+          <button className={view === "journal" ? "active" : ""} onClick={() => handleViewChange("journal")}>
+            <BookMarked size={15} />
+            {t(language, "navJournal")}
           </button>
         </div>
         <div className="sidebar-theme-switcher">
@@ -89,6 +93,10 @@ export function SidebarNav({
         <button className={view === "analytics" ? "active" : ""} onClick={() => handleViewChange("analytics")} aria-label={t(language, "navAnalytics")}>
           <BarChart3 size={16} />
           <span>{t(language, "navAnalytics")}</span>
+        </button>
+        <button className={view === "journal" ? "active" : ""} onClick={() => handleViewChange("journal")} aria-label={t(language, "navJournal")}>
+          <BookMarked size={16} />
+          <span>{t(language, "navJournal")}</span>
         </button>
         <button className={view === "settings" ? "active" : ""} onClick={() => handleViewChange("settings")} aria-label={t(language, "navSettings")}>
           <Settings2 size={16} />

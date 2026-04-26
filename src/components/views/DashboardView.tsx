@@ -78,33 +78,33 @@ export function DashboardView({
             Trading Dashboard
           </>
         }
-        subtitle="Überblick über deine Trading-Performance"
+        subtitle={t(language, "dashboardSubtitle")}
       />
 
       <section className="section dashboard-link-grid">
         <button className="card dashboard-link-card" onClick={onOpenAnalyticsOverview}>
           <h3>
             <TrendingUp size={14} />
-            Realisierter P&L
+            {t(language, "dashboardRealizedPL")}
           </h3>
           <div className={`value ${kpis.totalPL >= 0 ? "positive" : "negative"}`}>{money(kpis.totalPL)}</div>
-          <p>Zu Auswertungen</p>
+          <p>{t(language, "dashboardToAnalytics")}</p>
         </button>
         <button className="card dashboard-link-card" onClick={onOpenTradesWithOpenFilter}>
           <h3>
             <Layers size={14} />
-            Offene Positionen
+            {t(language, "dashboardOpenPositionsTitle")}
           </h3>
           <div className="value">{kpis.openTrades}</div>
-          <p>Zu Trades (Status: Offen)</p>
+          <p>{t(language, "dashboardOpenTradesLink")}</p>
         </button>
         <button className="card dashboard-link-card" onClick={onOpenTradesWithOpenFilter}>
           <h3>
             <HandCoins size={14} />
-            Offenes Kapital
+            {t(language, "dashboardOpenCapitalTitle")}
           </h3>
           <div className="value">{money(kpis.openCapital)}</div>
-          <p>Zu offenen Positionen</p>
+          <p>{t(language, "dashboardToOpenPositions")}</p>
         </button>
         <div className="card dashboard-link-card dashboard-clock-card" role="status" aria-live="polite">
           <h3>
@@ -117,7 +117,7 @@ export function DashboardView({
               <p>{dashboardDate}</p>
             </div>
             <div className="dashboard-clock-right">
-              <p>{`Börse: ${exchange}`}</p>
+              <p>{t(language, "exchangeLabel", { ex: exchange })}</p>
               {showMarketPulse ? (
                 <p className={`market-status ${marketOpen ? "open" : "closed"}`}>
                   <span className={`market-pulse ${marketOpen ? "open" : "closed"}`} aria-hidden="true" />
@@ -135,31 +135,37 @@ export function DashboardView({
 
       <section className="section card">
         <div className="dashboard-section-head">
-          <h3>Offene Positionen ({dashboardOpenPositions.length})</h3>
+          <h3>{t(language, "openPositionsSection", { n: dashboardOpenPositions.length })}</h3>
           <button className="secondary slim" onClick={onOpenTradesWithOpenFilter}>
-            Alle anzeigen
+            {t(language, "showAll")}
           </button>
         </div>
         <table>
           <thead>
             <tr>
               <th onClick={() => onToggleDashboardOpenSort("name")} className="sortable">
-                Name{dashboardOpenSortMarker("name")}
+                {t(language, "name")}
+                {dashboardOpenSortMarker("name")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("typ")} className="sortable">
-                Typ{dashboardOpenSortMarker("typ")}
+                {t(language, "type")}
+                {dashboardOpenSortMarker("typ")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("basiswert")} className="sortable">
-                Basiswert{dashboardOpenSortMarker("basiswert")}
+                {t(language, "basiswert")}
+                {dashboardOpenSortMarker("basiswert")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("kaufzeitpunkt")} className="sortable">
-                Kaufdatum{dashboardOpenSortMarker("kaufzeitpunkt")}
+                {t(language, "buyDate")}
+                {dashboardOpenSortMarker("kaufzeitpunkt")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("kaufPreis")} className="sortable">
-                Investiert{dashboardOpenSortMarker("kaufPreis")}
+                {t(language, "invested")}
+                {dashboardOpenSortMarker("kaufPreis")}
               </th>
               <th onClick={() => onToggleDashboardOpenSort("stueck")} className="sortable">
-                Stück{dashboardOpenSortMarker("stueck")}
+                {t(language, "shares")}
+                {dashboardOpenSortMarker("stueck")}
               </th>
             </tr>
           </thead>
@@ -177,21 +183,21 @@ export function DashboardView({
           </tbody>
         </table>
         {dashboardOpenPositions.length > 10 && (
-          <p className="dashboard-more-link">+{dashboardOpenPositions.length - 10} weitere offene Trades anzeigen</p>
+          <p className="dashboard-more-link">{t(language, "moreOpenTrades", { n: dashboardOpenPositions.length - 10 })}</p>
         )}
       </section>
 
       <section className="section dashboard-bottom-grid">
         <div className="card">
-          <h3>Monats-P&L</h3>
+          <h3>{t(language, "monthPL")}</h3>
           <table>
             <thead>
               <tr>
-                <th>Monat</th>
-                <th># Trades</th>
-                <th>P&L</th>
-                <th>Win-Rate</th>
-                <th>Kumulativ</th>
+                <th>{t(language, "month")}</th>
+                <th>{t(language, "hashTrades")}</th>
+                <th>{t(language, "pl")}</th>
+                <th>{t(language, "winRate")}</th>
+                <th>{t(language, "cumulative")}</th>
               </tr>
             </thead>
             <tbody>
@@ -209,9 +215,9 @@ export function DashboardView({
         </div>
 
         <div className="card">
-          <h3>Top & Flop Basiswerte</h3>
+          <h3>{t(language, "topFlopTitle")}</h3>
           <div className="topflop-block">
-            <h4 className="positive">Top 5 Gewinner</h4>
+            <h4 className="positive">{t(language, "topWinners")}</h4>
             {dashboardTopFlop.top.map(([asset, pl]) => (
               <div key={`top-${asset}`} className="topflop-row top">
                 <button className="asset-jump-link" onClick={() => onJumpToAsset(asset)}>
@@ -222,7 +228,7 @@ export function DashboardView({
             ))}
           </div>
           <div className="topflop-block">
-            <h4 className="negative">Top 5 Verlierer</h4>
+            <h4 className="negative">{t(language, "topLosers")}</h4>
             {dashboardTopFlop.flop.map(([asset, pl]) => (
               <div key={`flop-${asset}`} className="topflop-row flop">
                 <button className="asset-jump-link" onClick={() => onJumpToAsset(asset)}>

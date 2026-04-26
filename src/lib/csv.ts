@@ -103,6 +103,37 @@ function pick(row: Row, ...names: string[]): string | undefined {
   return undefined;
 }
 
+/** Erste Zeilen `sep=;` / `sep=,` (Excel) entfernen */
+function stripLeadingSepDirective(lines: string[]): string[] {
+  const out = [...lines];
+  while (out.length > 0) {
+    const t = out[0].replace(/^\ufeff/, "").trim();
+    if (/^sep\s*=/i.test(t)) out.shift();
+    else break;
+  }
+  return out;
+}
+
+function detectDelimiterFromHeaderLine(line: string): string {
+  const semi = (line.match(/;/g) ?? []).length;
+  const comma = (line.match(/,/g) ?? []).length;
+  if (semi > comma) return ";";
+  if (comma > semi) return ",";
+  return line.includes(";") ? ";" : ",";
+}
+
+function isLikelyTradesHeaderLine(line: string): boolean {
+  const lower = line.toLowerCase();
+  const hasId = /\btradeid\b|\btrade_id\b/.test(lower) || /(^|[;\t,])id($|[;\t,])/i.test(lower);
+  const hasName = /\bname\b/.test(lower);
+  return hasId && hasName && /[;,\t]/.test(line);
+}
+
+function isLikelyAssetsHeaderLine(line: string): boolean {
+  const lower = line.toLowerCase();
+  return /\bname\b/.test(lower) && (/\bcategory\b|\bkategorie\b/.test(lower) || /\bticker\b/.test(lower)) && /[;,\t]/.test(line);
+}
+
 function inferStatus(row: Row): "Offen" | "Geschlossen" {
   const statusRaw = pick(row, "status");
   if (statusRaw === "Offen" || statusRaw === "Geschlossen") return statusRaw;
@@ -132,15 +163,22 @@ function rowId(row: Row, index: number): string {
 }
 
 export function parseTradesCsv(csvText: string): Trade[] {
-  const lines = csvText.split(/\r?\n/);
-  const headerIndex = lines.findIndex((line) =>
-    /"?(tradeid|trade_id|id)"?\s*,\s*"?(name)"?/i.test(line)
-  );
-  const normalizedCsv = headerIndex >= 0 ? lines.slice(headerIndex).join("\n") : csvText;
+  const lines = csvText
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\ufeff/, ""))
+    .filter((l) => l.trim() !== "");
+  const withoutSep = stripLeadingSepDirective(lines);
+  const headerIndex = withoutSep.findIndex((line) => isLikelyTradesHeaderLine(line));
+  const fromHeader = headerIndex >= 0 ? withoutSep.slice(headerIndex) : withoutSep;
+  if (fromHeader.length === 0) return [];
 
-  const parsed = Papa.parse<Row>(normalizedCsv, {
+  const delimiter = detectDelimiterFromHeaderLine(fromHeader[0] ?? "");
+  const body = fromHeader.join("\n");
+
+  const parsed = Papa.parse<Row>(body, {
     header: true,
     skipEmptyLines: true,
+    delimiter,
     transformHeader: (h) => h.replace(/^\ufeff/, "").trim()
   });
 
@@ -245,9 +283,22 @@ function parseAssetRows(rows: Row[]): AssetMeta[] {
 }
 
 export function parseAssetsCsv(csvText: string): AssetMeta[] {
-  const parsed = Papa.parse<Row>(csvText, {
+  const lines = csvText
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\ufeff/, ""))
+    .filter((l) => l.trim() !== "");
+  const withoutSep = stripLeadingSepDirective(lines);
+  const headerIndex = withoutSep.findIndex((line) => isLikelyAssetsHeaderLine(line));
+  const fromHeader = headerIndex >= 0 ? withoutSep.slice(headerIndex) : withoutSep;
+  if (fromHeader.length === 0) return [];
+
+  const delimiter = detectDelimiterFromHeaderLine(fromHeader[0] ?? "");
+  const body = fromHeader.join("\n");
+
+  const parsed = Papa.parse<Row>(body, {
     header: true,
     skipEmptyLines: true,
+    delimiter,
     transformHeader: (h) => h.replace(/^\ufeff/, "").trim()
   });
   return parseAssetRows(parsed.data);

@@ -1,5 +1,7 @@
 import { Briefcase, CandlestickChart, ChartColumn, CircleDollarSign, Clock3, Database, LineChart, Percent, ShieldAlert, Sparkles, Target, TrendingUp } from "lucide-react";
 import { formatMonthLabel } from "../../app/date";
+import { t } from "../../app/i18n";
+import type { AppSettings } from "../../app/settings";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
@@ -9,6 +11,7 @@ import { SimpleBarChart } from "../SimpleBarChart";
 type AnalyticsData = NonNullable<ReturnType<typeof buildAnalyticsData>>;
 
 interface AnalyticsViewProps {
+  language: AppSettings["language"];
   analyticsData: AnalyticsData;
   analyticsTab: "overview" | "timing" | "assets";
   onAnalyticsTabChange: (tab: "overview" | "timing" | "assets") => void;
@@ -16,7 +19,7 @@ interface AnalyticsViewProps {
   onBackToTrades: () => void;
 }
 
-export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChange, trades, onBackToTrades }: AnalyticsViewProps) {
+export function AnalyticsView({ language, analyticsData, analyticsTab, onAnalyticsTabChange, trades, onBackToTrades }: AnalyticsViewProps) {
   const plDistributionData = [
     { label: "<-500", min: -Infinity, max: -500 },
     { label: "-500..-200", min: -500, max: -200 },
@@ -43,14 +46,14 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
         title={
           <>
             <ChartColumn size={18} />
-            Auswertungen
+            {t(language, "analyticsTitle")}
           </>
         }
-        subtitle="Detaillierte Analyse deiner Trading-Performance"
+        subtitle={t(language, "analyticsSubtitle")}
         actions={
           <button className="secondary" onClick={onBackToTrades}>
             <CandlestickChart size={14} />
-            Zu Trades
+            {t(language, "toTrades")}
           </button>
         }
       />
@@ -59,35 +62,35 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
         <div className="card">
           <h3>
             <Briefcase size={14} />
-            Analysierte Trades
+            {t(language, "analyzedTrades")}
           </h3>
           <div className="value">{analyticsData.closedCount}</div>
         </div>
         <div className="card">
           <h3>
             <Percent size={14} />
-            Win-Rate
+            {t(language, "winRate")}
           </h3>
           <div className="value positive">{((analyticsData.winners / (analyticsData.closedCount || 1)) * 100).toFixed(1)}%</div>
         </div>
         <div className="card">
           <h3>
             <TrendingUp size={14} />
-            Gesamt P&L
+            {t(language, "totalPL")}
           </h3>
           <div className={`value ${analyticsData.totalPL >= 0 ? "positive" : "negative"}`}>{money(analyticsData.totalPL)}</div>
         </div>
         <div className="card">
           <h3>
             <ShieldAlert size={14} />
-            Max Drawdown
+            {t(language, "maxDrawdown")}
           </h3>
           <div className="value negative">{money(analyticsData.maxDrawdown)}</div>
         </div>
         <div className="card">
           <h3>
             <Clock3 size={14} />
-            Handelstage
+            {t(language, "tradingDays")}
           </h3>
           <div className="value">{analyticsData.tradingDays}</div>
         </div>
@@ -96,45 +99,57 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
       <div className="card analytics-insights-card">
         <h3>
           <Sparkles size={14} />
-          Konsolidierte Highlights
+          {t(language, "highlightsTitle")}
         </h3>
         <div className="analytics-insights-list">
           <div className="analytics-insight positive">
-            <span>Stärkste Serie</span>
-            <strong>{analyticsData.bestSeries} Gewinne in Folge</strong>
+            <span>{t(language, "strongestStreak")}</span>
+            <strong>{t(language, "winsInRow", { n: analyticsData.bestSeries })}</strong>
           </div>
           <div className="analytics-insight negative">
-            <span>Schwächste Serie</span>
-            <strong>{analyticsData.worstSeries} Verluste in Folge</strong>
+            <span>{t(language, "weakestStreak")}</span>
+            <strong>{t(language, "lossesInRow", { n: analyticsData.worstSeries })}</strong>
           </div>
           <div className="analytics-insight">
-            <span>Bester Monat</span>
-            <strong>{analyticsData.bestMonth ? `${money(analyticsData.bestMonth.pl)} (${formatMonthLabel(analyticsData.bestMonth.month)})` : "-"}</strong>
+            <span>{t(language, "bestMonth")}</span>
+            <strong>
+              {analyticsData.bestMonth
+                ? `${money(analyticsData.bestMonth.pl)} (${formatMonthLabel(analyticsData.bestMonth.month)})`
+                : t(language, "noneDash")}
+            </strong>
           </div>
           <div className="analytics-insight">
-            <span>Schlechtester Monat</span>
-            <strong>{analyticsData.worstMonth ? `${money(analyticsData.worstMonth.pl)} (${formatMonthLabel(analyticsData.worstMonth.month)})` : "-"}</strong>
+            <span>{t(language, "worstMonth")}</span>
+            <strong>
+              {analyticsData.worstMonth
+                ? `${money(analyticsData.worstMonth.pl)} (${formatMonthLabel(analyticsData.worstMonth.month)})`
+                : t(language, "noneDash")}
+            </strong>
           </div>
           <div className="analytics-insight">
-            <span>Top-Basiswert</span>
-            <strong>{analyticsData.topAsset ? `${analyticsData.topAsset[0]} (${money(analyticsData.topAsset[1].pl)})` : "-"}</strong>
+            <span>{t(language, "topAsset")}</span>
+            <strong>
+              {analyticsData.topAsset ? `${analyticsData.topAsset[0]} (${money(analyticsData.topAsset[1].pl)})` : t(language, "noneDash")}
+            </strong>
           </div>
           <div className="analytics-insight">
-            <span>Flop-Basiswert</span>
-            <strong>{analyticsData.flopAsset ? `${analyticsData.flopAsset[0]} (${money(analyticsData.flopAsset[1].pl)})` : "-"}</strong>
+            <span>{t(language, "flopAsset")}</span>
+            <strong>
+              {analyticsData.flopAsset ? `${analyticsData.flopAsset[0]} (${money(analyticsData.flopAsset[1].pl)})` : t(language, "noneDash")}
+            </strong>
           </div>
         </div>
       </div>
 
       <div className="analytics-tabbar">
         <button className={analyticsTab === "overview" ? "secondary active" : "secondary"} onClick={() => onAnalyticsTabChange("overview")}>
-          Überblick
+          {t(language, "tabOverview")}
         </button>
         <button className={analyticsTab === "timing" ? "secondary active" : "secondary"} onClick={() => onAnalyticsTabChange("timing")}>
-          Timing & Verteilung
+          {t(language, "tabTiming")}
         </button>
         <button className={analyticsTab === "assets" ? "secondary active" : "secondary"} onClick={() => onAnalyticsTabChange("assets")}>
-          Basiswerte & Typen
+          {t(language, "tabAssets")}
         </button>
       </div>
 
@@ -143,31 +158,31 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card analytics-grid-6">
             <h3>
               <CircleDollarSign size={14} />
-              Kauf & Verkauf Übersicht
+              {t(language, "buySellOverviewTitle")}
             </h3>
             <div className="analytics-mini-grid">
               <div>
-                <span>Σ Kaufvolumen</span>
+                <span>{t(language, "sigmaBuyVol")}</span>
                 <strong>{money(analyticsData.totalBuy)}</strong>
               </div>
               <div>
-                <span>Σ Verkaufsvolumen</span>
+                <span>{t(language, "sigmaSellVol")}</span>
                 <strong>{money(analyticsData.totalSell)}</strong>
               </div>
               <div className="accent">
-                <span>Differenz (P&L)</span>
+                <span>{t(language, "diffPL")}</span>
                 <strong>{money(analyticsData.totalPL)}</strong>
               </div>
               <div>
-                <span>Ø Positionsgröße</span>
+                <span>{t(language, "avgPosSize")}</span>
                 <strong>{money(analyticsData.avgPosition)}</strong>
               </div>
               <div>
-                <span>Min Position</span>
+                <span>{t(language, "minPosition")}</span>
                 <strong>{money(analyticsData.minPosition)}</strong>
               </div>
               <div>
-                <span>Max Position</span>
+                <span>{t(language, "maxPosition")}</span>
                 <strong>{money(analyticsData.maxPosition)}</strong>
               </div>
             </div>
@@ -176,39 +191,39 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card analytics-grid-8">
             <h3>
               <ShieldAlert size={14} />
-              Kosten, Gebühren & Steuern
+              {t(language, "costsFeesTaxTitle")}
             </h3>
             <div className="analytics-mini-grid analytics-eight">
               <div>
-                <span>Σ Gebühren Kauf</span>
+                <span>{t(language, "sigmaBuyFees")}</span>
                 <strong>{money(analyticsData.totalBuyFees)}</strong>
               </div>
               <div>
-                <span>Σ Gebühren Verkauf</span>
+                <span>{t(language, "sigmaSellFees")}</span>
                 <strong>{money(analyticsData.totalSellFees)}</strong>
               </div>
               <div>
-                <span>Σ Gebühren gesamt</span>
+                <span>{t(language, "sigmaFeesTotal")}</span>
                 <strong>{money(analyticsData.totalFees)}</strong>
               </div>
               <div>
-                <span>Σ Steuern</span>
+                <span>{t(language, "sigmaTaxes")}</span>
                 <strong>{money(analyticsData.totalTaxes)}</strong>
               </div>
               <div>
-                <span>Gebührenquote auf Kauf</span>
+                <span>{t(language, "feesToBuyRatio")}</span>
                 <strong>{analyticsData.feesToBuyPct.toFixed(2)}%</strong>
               </div>
               <div>
-                <span>Steuerquote auf Verkauf</span>
+                <span>{t(language, "taxesToSellRatio")}</span>
                 <strong>{analyticsData.taxesToSellPct.toFixed(2)}%</strong>
               </div>
               <div>
-                <span>Ø Gebühren / Trade</span>
+                <span>{t(language, "avgFeesPerTrade")}</span>
                 <strong>{money(analyticsData.avgFeesPerTrade)}</strong>
               </div>
               <div>
-                <span>Ø Steuern / Trade</span>
+                <span>{t(language, "avgTaxesPerTrade")}</span>
                 <strong>{money(analyticsData.avgTaxesPerTrade)}</strong>
               </div>
             </div>
@@ -217,39 +232,39 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card analytics-grid-8">
             <h3>
               <LineChart size={14} />
-              Gewinn & Verlust Statistiken
+              {t(language, "plStatsTitle")}
             </h3>
             <div className="analytics-mini-grid analytics-eight">
               <div className="good">
-                <span>Gewinner</span>
+                <span>{t(language, "winners")}</span>
                 <strong>{analyticsData.winners}</strong>
               </div>
               <div className="bad">
-                <span>Verlierer</span>
+                <span>{t(language, "losers")}</span>
                 <strong>{analyticsData.losers}</strong>
               </div>
               <div className="good">
-                <span>Σ Gewinne</span>
+                <span>{t(language, "sigmaGains")}</span>
                 <strong>{money(analyticsData.grossGain)}</strong>
               </div>
               <div className="bad">
-                <span>Σ Verluste</span>
+                <span>{t(language, "sigmaLosses")}</span>
                 <strong>{money(analyticsData.grossLoss)}</strong>
               </div>
               <div className="good">
-                <span>Ø Gewinn</span>
+                <span>{t(language, "avgGain")}</span>
                 <strong>{money(analyticsData.avgGain)}</strong>
               </div>
               <div className="bad">
-                <span>Ø Verlust</span>
+                <span>{t(language, "avgLoss")}</span>
                 <strong>{money(analyticsData.avgLoss)}</strong>
               </div>
               <div className="good">
-                <span>Profit-Faktor</span>
+                <span>{t(language, "profitFactor")}</span>
                 <strong>{analyticsData.profitFactor.toFixed(2)}</strong>
               </div>
               <div>
-                <span>Erwartungswert</span>
+                <span>{t(language, "expectancy")}</span>
                 <strong>{money(analyticsData.expectancy)}</strong>
               </div>
             </div>
@@ -258,7 +273,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card">
             <h3>
               <ChartColumn size={14} />
-              Gewinn/Verlust Verteilung
+              {t(language, "plDistributionTitle")}
             </h3>
             <SimpleBarChart mode="count" data={plDistributionData} />
           </div>
@@ -271,7 +286,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
             <div className="card chart-card">
               <h3>
                 <TrendingUp size={14} />
-                Monats-Performance
+                {t(language, "monthPerf")}
               </h3>
               <SimpleBarChart
                 mode="pl"
@@ -284,7 +299,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
             <div className="card">
               <h3>
                 <Target size={14} />
-                Win/Loss Verteilung
+                {t(language, "winLossDist")}
               </h3>
               <div className="donut-wrap">
                 <div
@@ -296,7 +311,8 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
                   <div className="donut-inner">{Math.round((analyticsData.winners / analyticsData.closedCount) * 100)}%</div>
                 </div>
                 <p>
-                  <span className="positive">{analyticsData.winners} Wins</span> / <span className="negative">{analyticsData.losers} Losses</span>
+                  <span className="positive">{t(language, "analyticsDonutWins", { n: analyticsData.winners })}</span> /{" "}
+                  <span className="negative">{t(language, "analyticsDonutLosses", { n: analyticsData.losers })}</span>
                 </p>
               </div>
             </div>
@@ -306,14 +322,14 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
             <div className="card chart-card">
               <h3>
                 <ChartColumn size={14} />
-                Performance nach Wochentag
+                {t(language, "perfByWeekday")}
               </h3>
               <SimpleBarChart mode="pl" data={analyticsData.weekdayData.map((d) => ({ label: d.label, value: d.value }))} />
             </div>
             <div className="card chart-card">
               <h3>
                 <Briefcase size={14} />
-                Trades nach Positionsgröße
+                {t(language, "tradesBySize")}
               </h3>
               <SimpleBarChart mode="count" data={analyticsData.sizeData.map((d) => ({ label: d.label, value: d.value }))} />
             </div>
@@ -322,7 +338,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card chart-card">
             <h3>
               <Clock3 size={14} />
-              Performance nach Uhrzeit (Kauf)
+              {t(language, "perfByHourBuy")}
             </h3>
             <SimpleBarChart mode="pl" data={analyticsData.hourData.map((d) => ({ label: d.label, value: d.value }))} />
           </div>
@@ -330,7 +346,7 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card chart-card">
             <h3>
               <ShieldAlert size={14} />
-              Gebühren + Steuern pro Monat
+              {t(language, "feesTaxPerMonth")}
             </h3>
             <SimpleBarChart
               mode="pl"
@@ -344,39 +360,39 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
           <div className="card analytics-grid-8">
             <h3>
               <Clock3 size={14} />
-              Haltedauer-Analyse
+              {t(language, "holdAnalysisTitle")}
             </h3>
             <div className="analytics-mini-grid analytics-eight">
               <div>
-                <span>Ø Gesamt</span>
-                <strong>{analyticsData.hold.avg.toFixed(1)} Tage</strong>
+                <span>{t(language, "avgTotal")}</span>
+                <strong>{t(language, "daysCount", { n: analyticsData.hold.avg.toFixed(1) })}</strong>
               </div>
               <div className="good">
-                <span>Ø Wins</span>
-                <strong>{analyticsData.hold.winAvg.toFixed(1)} Tage</strong>
+                <span>{t(language, "avgWinsHold")}</span>
+                <strong>{t(language, "daysCount", { n: analyticsData.hold.winAvg.toFixed(1) })}</strong>
               </div>
               <div className="bad">
-                <span>Ø Losses</span>
-                <strong>{analyticsData.hold.lossAvg.toFixed(1)} Tage</strong>
+                <span>{t(language, "avgLossesHold")}</span>
+                <strong>{t(language, "daysCount", { n: analyticsData.hold.lossAvg.toFixed(1) })}</strong>
               </div>
               <div>
-                <span>Max Haltedauer</span>
-                <strong>{analyticsData.hold.max} Tage</strong>
+                <span>{t(language, "maxHold")}</span>
+                <strong>{t(language, "daysCount", { n: analyticsData.hold.max })}</strong>
               </div>
               <div>
-                <span>Intraday</span>
+                <span>{t(language, "intraday")}</span>
                 <strong>{analyticsData.hold.intraday}</strong>
               </div>
               <div>
-                <span>1-7 Tage</span>
+                <span>{t(language, "days1to7")}</span>
                 <strong>{analyticsData.hold.oneTo7}</strong>
               </div>
               <div>
-                <span>8-30 Tage</span>
+                <span>{t(language, "days8to30")}</span>
                 <strong>{analyticsData.hold.eightTo30}</strong>
               </div>
               <div>
-                <span>30+ Tage</span>
+                <span>{t(language, "days30plus")}</span>
                 <strong>{analyticsData.hold.over30}</strong>
               </div>
             </div>
@@ -390,16 +406,16 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
             <div className="card">
               <h3>
                 <Database size={14} />
-                Performance pro Basiswert
+                {t(language, "perUnderlyingTitle")}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>Basiswert</th>
-                    <th>#</th>
-                    <th>Win%</th>
-                    <th>P&L</th>
-                    <th>Rendite</th>
+                    <th>{t(language, "basiswert")}</th>
+                    <th>{t(language, "hashCount")}</th>
+                    <th>{t(language, "winPct")}</th>
+                    <th>{t(language, "pl")}</th>
+                    <th>{t(language, "returnLabel")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -418,16 +434,16 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
             <div className="card">
               <h3>
                 <CandlestickChart size={14} />
-                Performance pro Trade-Typ
+                {t(language, "perTypeTitle")}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>Typ</th>
-                    <th>#</th>
-                    <th>Win%</th>
-                    <th>P&L</th>
-                    <th>Rendite</th>
+                    <th>{t(language, "type")}</th>
+                    <th>{t(language, "hashCount")}</th>
+                    <th>{t(language, "winPct")}</th>
+                    <th>{t(language, "pl")}</th>
+                    <th>{t(language, "returnLabel")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -451,31 +467,31 @@ export function AnalyticsView({ analyticsData, analyticsTab, onAnalyticsTabChang
         <div className="card">
           <h3>
             <ShieldAlert size={14} />
-            Risiko-Kennzahlen
+            {t(language, "riskMetricsTitle")}
           </h3>
           <div className="analytics-mini-grid">
             <div>
-              <span>Standardabweichung</span>
+              <span>{t(language, "stdDevLabel")}</span>
               <strong>{money(analyticsData.stdDev)}</strong>
             </div>
             <div className="bad">
-              <span>Max. Drawdown</span>
+              <span>{t(language, "maxDdLabel")}</span>
               <strong>{money(analyticsData.maxDrawdown)}</strong>
             </div>
             <div>
-              <span>Gesamtrendite</span>
+              <span>{t(language, "totalReturnLabel")}</span>
               <strong className={analyticsData.returnPct >= 0 ? "positive" : "negative"}>{analyticsData.returnPct.toFixed(1)}%</strong>
             </div>
             <div className="bad">
-              <span>Totalverluste</span>
+              <span>{t(language, "totalLossTradesLabel")}</span>
               <strong>{analyticsData.totalLossTrades}</strong>
             </div>
             <div>
-              <span>Profit-Faktor</span>
+              <span>{t(language, "profitFactor")}</span>
               <strong>{analyticsData.profitFactor.toFixed(2)}</strong>
             </div>
             <div>
-              <span>Erwartungswert</span>
+              <span>{t(language, "expectancy")}</span>
               <strong>{money(analyticsData.expectancy)}</strong>
             </div>
           </div>

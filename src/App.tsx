@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import type { Trade } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
 import { saveTradesToStorage } from "./lib/storage";
+import { buildAppBackupJson, parseTradesBackupImport } from "./lib/backup";
 import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
 import {
   applyBasiswertMergeToTrades,
@@ -25,10 +26,12 @@ import { NewTradeView } from "./components/views/NewTradeView";
 import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
+import { JournalView } from "./components/views/JournalView";
 import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
 import { setMoneyFormat } from "./lib/analytics";
 import { t } from "./app/i18n";
 import { normalizeBasiswertKey } from "./data/knownAssetTickers";
+import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
 
 export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
@@ -37,7 +40,7 @@ export default function App() {
     if (saved === "dark" || saved === "light") return saved;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
-  const [view, setView] = useState<View>(() => readStoredAppSettings().defaultStartView);
+  const [view, setView] = useState<View>(() => readStoredAppSettings().defaultStartView as View);
   const [trades, setTrades] = useState<Trade[]>(() => readInitialTrades());
   const [form, setForm] = useState<NewTradeForm>(() =>
     defaultForm({
@@ -71,10 +74,35 @@ export default function App() {
   const [dashboardNow, setDashboardNow] = useState(() => new Date());
   const [assetMeta, setAssetMeta] = useState<AssetMeta[]>(() => loadAssetMetaFromStorage());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [journalData, setJournalData] = useState<JournalData>(() => loadJournalFromStorage());
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
     setMobileMenuOpen(false);
+  };
+
+  const handleJournalDayChange = (ymd: string, text: string) => {
+    setJournalData((prev) => {
+      const byDay = { ...prev.byDay };
+      const trimmed = text.trim();
+      if (trimmed) byDay[ymd] = text;
+      else delete byDay[ymd];
+      const next = { ...prev, byDay };
+      saveJournalToStorage(next);
+      return next;
+    });
+  };
+
+  const handleJournalWeekChange = (weekKey: string, text: string) => {
+    setJournalData((prev) => {
+      const byWeek = { ...prev.byWeek };
+      const trimmed = text.trim();
+      if (trimmed) byWeek[weekKey] = text;
+      else delete byWeek[weekKey];
+      const next = { ...prev, byWeek };
+      saveJournalToStorage(next);
+      return next;
+    });
   };
 
   const makeDefaultTradeForm = () =>
@@ -323,11 +351,41 @@ export default function App() {
   }, [filteredAssets]);
 
   const importTradesFile = async (file: File) => {
+    const lang = appSettings.language;
     const fileName = file.name.toLowerCase();
+    if (fileName.endsWith(".json")) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        window.alert(t(lang, "importJsonInvalid"));
+        return;
+      }
+      const backup = parseTradesBackupImport(parsed);
+      if (!backup) {
+        window.alert(t(lang, "importJsonInvalid"));
+        return;
+      }
+      const merged = applyBasiswertMergeToTrades(backup.trades).next;
+      setTrades(merged);
+      saveTradesToStorage(merged);
+      if (backup.assetMeta && backup.assetMeta.length > 0) {
+        const metaMerged = normalizeAndMergeAssetMetaList(backup.assetMeta).next;
+        setAssetMeta(metaMerged);
+        saveAssetMetaToStorage(metaMerged);
+      }
+      window.alert(
+        t(lang, "importJsonOk", {
+          trades: merged.length,
+          assets: backup.assetMeta?.length ? t(lang, "importJsonOkAssets") : ""
+        })
+      );
+      return;
+    }
     const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
     const rows = isExcel ? await parseTradesExcel(file) : parseTradesCsv(await file.text());
     if (rows.length === 0) {
-      window.alert("Keine gültigen Trades gefunden. Bitte Vorlage und Spalten prüfen.");
+      window.alert(t(lang, "importNoTrades"));
       return;
     }
     const merged = applyBasiswertMergeToTrades(rows).next;
@@ -393,7 +451,7 @@ export default function App() {
     const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
     const rows = isExcel ? await parseAssetsExcel(file) : parseAssetsCsv(await file.text());
     if (rows.length === 0) {
-      window.alert("Keine gültigen Basiswerte gefunden. Bitte Vorlage und Spalten prüfen.");
+      window.alert(t(appSettings.language, "importNoAssets"));
       return;
     }
     const merged = normalizeAndMergeAssetMetaList(rows).next;
@@ -404,7 +462,7 @@ export default function App() {
   const saveAssetMetaPatch = (patch: AssetMeta, renameFrom?: string) => {
     const canon = canonicalizeBasiswert(patch.name.trim());
     if (!canon) {
-      window.alert("Der Basiswert-Name darf nicht leer sein.");
+      window.alert(t(appSettings.language, "basiswertEmpty"));
       return;
     }
     const patchNorm: AssetMeta = { ...patch, name: canon };
@@ -448,7 +506,7 @@ export default function App() {
     saveTradesToStorage(nextTrades);
     saveAssetMetaToStorage(nextMeta);
     window.alert(
-      `Basiswerte zusammengeführt.\n\nTrades mit angepasstem Basiswert-Feld: ${substitutions}\nZusammengeführte Basiswert-Meta-Zeilen: ${mergedPairs}\n\nTipp: Vor größeren Bereinigungen einmal JSON/CSV exportieren.`
+      `${t(appSettings.language, "mergeDoneTitle")}\n\n${t(appSettings.language, "mergeDoneBody", { substitutions, mergedPairs })}`
     );
   };
 
@@ -456,8 +514,15 @@ export default function App() {
     const { nextMeta, applied, stillWithoutChartSymbol } = enrichAssetMetaFromKnownTickers(trades, assetMeta);
     setAssetMeta(nextMeta);
     saveAssetMetaToStorage(nextMeta);
+    const lang = appSettings.language;
     window.alert(
-      `Fertig.\n\nÜbernommen (${applied.length}): ${applied.join(", ") || "—"}\n\nWeiterhin ohne Chart-Ticker bzw. keine Zuordnung in der Liste (${stillWithoutChartSymbol.length}):\n${stillWithoutChartSymbol.join(", ") || "—"}\n\nBereits gesetzte Ticker wurden nicht überschrieben. Namen wie in der Liste (z. B. „SAP SE“) helfen — sonst Ticker im Bearbeiten-Dialog oder per Import setzen.`
+      `${t(lang, "tickerDoneTitle")}\n\n${t(lang, "alertTickerApplied", {
+        n: applied.length,
+        list: applied.join(", ") || t(lang, "noneDash")
+      })}\n\n${t(lang, "alertTickerStill", {
+        n: stillWithoutChartSymbol.length,
+        list: stillWithoutChartSymbol.join(", ") || t(lang, "noneDash")
+      })}\n\n${t(lang, "alertTickerFooter")}`
     );
   };
 
@@ -645,18 +710,18 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
   const exportTradesJsonBackup = () => {
-    const json = JSON.stringify(trades, null, 2);
+    const json = buildAppBackupJson(trades, assetMeta);
     const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "trades-backup.json";
+    link.download = "trading-dashboard-backup.json";
     link.click();
     URL.revokeObjectURL(url);
   };
   const deleteTrade = (id: string) => {
     if (appSettings.confirmBeforeDelete) {
-      const confirmed = window.confirm(appSettings.language === "en" ? "Delete this trade?" : "Diesen Trade wirklich löschen?");
+      const confirmed = window.confirm(t(appSettings.language, "deleteTradeConfirm"));
       if (!confirmed) return;
     }
     const updated = trades.filter((trade) => trade.id !== id);
@@ -840,6 +905,7 @@ export default function App() {
         {view === "newTrade" && (
           <NewTradeView
             editingTradeId={editingTradeId}
+            language={appSettings.language}
             trades={trades}
             assetMeta={assetMeta}
             chartTheme={theme}
@@ -857,6 +923,7 @@ export default function App() {
         )}
         {view === "assets" && (
           <AssetsView
+            language={appSettings.language}
             assetSummary={assetSummary}
             assetSearch={assetSearch}
             onAssetSearchChange={setAssetSearch}
@@ -877,8 +944,20 @@ export default function App() {
             onSaveAssetMeta={saveAssetMetaPatch}
           />
         )}
+        {view === "journal" && (
+          <JournalView
+            language={appSettings.language}
+            journalData={journalData}
+            trades={trades}
+            onJournalDayChange={handleJournalDayChange}
+            onJournalWeekChange={handleJournalWeekChange}
+            onEditTrade={editTrade}
+            onDeleteTrade={deleteTrade}
+          />
+        )}
         {view === "analytics" && analyticsData && (
           <AnalyticsView
+            language={appSettings.language}
             analyticsData={analyticsData}
             analyticsTab={analyticsTab}
             onAnalyticsTabChange={setAnalyticsTab}

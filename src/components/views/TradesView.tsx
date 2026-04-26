@@ -71,16 +71,16 @@ export function TradesView(props: TradesViewProps) {
         title={
           <>
             <Search size={18} />
-            Trades
+            {t(props.language, "tradesTitle")}
           </>
         }
-        subtitle={`${props.filteredTrades.length} von ${props.trades.length} Trades`}
+        subtitle={t(props.language, "tradesSubtitle", { filtered: props.filteredTrades.length, total: props.trades.length })}
         actions={
           <>
             <input
               id="trades-import-input"
               type="file"
-              accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              accept=".csv,text/csv,.xlsx,.xls,.json,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden-file-input"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -90,59 +90,59 @@ export function TradesView(props: TradesViewProps) {
             <details className="actions-dropdown">
               <summary className="secondary">
                 <FileDown size={14} />
-                Import
+                {t(props.language, "import")}
                 <ChevronDown size={14} />
               </summary>
               <div className="actions-dropdown-menu">
                 <label htmlFor="trades-import-input" className="actions-dropdown-item file-pick-btn">
                   <span className="actions-dropdown-item-content">
                     <Upload size={14} />
-                    Datei importieren
+                    {t(props.language, "importFile")}
                   </span>
-                  <small>CSV oder Excel Datei laden</small>
+                  <small>{t(props.language, "importFileHint")}</small>
                 </label>
                 <button className="actions-dropdown-item" onClick={props.onDownloadImportTemplateCsv}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Vorlage CSV herunterladen
+                    {t(props.language, "templateCsv")}
                   </span>
-                  <small>Beispielspalten für CSV</small>
+                  <small>{t(props.language, "templateCsvHint")}</small>
                 </button>
                 <button className="actions-dropdown-item" onClick={props.onDownloadImportTemplateExcel}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    Vorlage Excel herunterladen
+                    {t(props.language, "templateExcel")}
                   </span>
-                  <small>Beispielspalten für Excel</small>
+                  <small>{t(props.language, "templateExcelHint")}</small>
                 </button>
               </div>
             </details>
             <details className="actions-dropdown">
               <summary className="secondary">
                 <FileDown size={14} />
-                Export
+                {t(props.language, "export")}
                 <ChevronDown size={14} />
               </summary>
               <div className="actions-dropdown-menu">
                 <button className="actions-dropdown-item" onClick={props.onExportTradesCsvForExcel}>
                   <span className="actions-dropdown-item-content">
                     <FileSpreadsheet size={14} />
-                    CSV Export (Excel)
+                    {t(props.language, "csvExportExcel")}
                   </span>
-                  <small>Alle Trades als CSV</small>
+                  <small>{t(props.language, "csvExportExcelHint")}</small>
                 </button>
                 <button className="actions-dropdown-item" onClick={props.onExportTradesJsonBackup}>
                   <span className="actions-dropdown-item-content">
                     <FileJson size={14} />
-                    JSON Backup
+                    {t(props.language, "jsonBackup")}
                   </span>
-                  <small>Vollständiges Backup-Format</small>
+                  <small>{t(props.language, "jsonBackupHint")}</small>
                 </button>
               </div>
             </details>
             <button className="primary new-trade-cta" onClick={props.onGoToNewTrade}>
               <Plus size={14} />
-              Neuer Trade
+              {t(props.language, "newTrade")}
             </button>
           </>
         }
@@ -152,28 +152,28 @@ export function TradesView(props: TradesViewProps) {
         <div className="card">
           <h3>
             <Briefcase size={14} />
-            Trades gesamt
+            {t(props.language, "tradesTotal")}
           </h3>
           <div className="value">{props.kpis.totalTrades}</div>
         </div>
         <div className="card">
           <h3>
             <Layers size={14} />
-            Offene Positionen
+            {t(props.language, "openPositions")}
           </h3>
           <div className="value">{props.kpis.openTrades}</div>
         </div>
         <div className="card">
           <h3>
             <TrendingUp size={14} />
-            Gewinner
+            {t(props.language, "winners")}
           </h3>
           <div className="value positive">{props.tradesSummary.winners}</div>
         </div>
         <div className="card">
           <h3>
             <TrendingDown size={14} />
-            Verlierer
+            {t(props.language, "losers")}
           </h3>
           <div className="value negative">{props.tradesSummary.losers}</div>
         </div>
@@ -182,27 +182,29 @@ export function TradesView(props: TradesViewProps) {
       <div className="trades-summary-grid trades-summary-grid-spaced">
         <div className="card">
           <h3>
-            <CircleDollarSign size={14} />Σ Kauf
+            <CircleDollarSign size={14} />
+            {t(props.language, "sigmaBuy")}
           </h3>
           <div className="value">{money(props.tradesSummary.totalKauf)}</div>
         </div>
         <div className="card">
           <h3>
-            <CircleDollarSign size={14} />Σ Verkauf
+            <CircleDollarSign size={14} />
+            {t(props.language, "sigmaSell")}
           </h3>
           <div className="value">{money(props.tradesSummary.totalVerkauf)}</div>
         </div>
         <div className="card">
           <h3>
             <HandCoins size={14} />
-            Offenes Kapital
+            {t(props.language, "openCapital")}
           </h3>
           <div className="value">{money(props.kpis.openCapital)}</div>
         </div>
         <div className="card">
           <h3>
             <TrendingUp size={14} />
-            Realisierter P&L
+            {t(props.language, "realizedPL")}
           </h3>
           <div className={`value ${props.kpis.totalPL >= 0 ? "positive" : "negative"}`}>{money(props.kpis.totalPL)}</div>
         </div>
@@ -212,53 +214,33 @@ export function TradesView(props: TradesViewProps) {
         <div className="trades-controls-main">
           {props.trades.length === 0 ? (
             <div className="card">
-              <h3>{props.language === "en" ? "Import Guide" : "Import Anleitung"}</h3>
-              <p>
-                {props.language === "en"
-                  ? "Download a template and fill the columns as specified:"
-                  : "Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus:"}{" "}
-                <code>
-                  tradeId, name, typ, basiswert, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell,
-                  verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status
-                </code>
-                .
-              </p>
-              <p>
-                {props.language === "en" ? (
-                  <>
-                    Formats: <strong>CSV</strong> or <strong>Excel (.xlsx/.xls)</strong>. For open trades, leave <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code>{" "}
-                    and <code>gewinn</code> empty and set <code>status</code> to <code>Offen</code>.
-                  </>
-                ) : (
-                  <>
-                    Formate: <strong>CSV</strong> oder <strong>Excel (.xlsx/.xls)</strong>. Bei offenem Trade <code>verkaufszeitpunkt</code>, <code>verkaufPreis</code> und{" "}
-                    <code>gewinn</code> leer lassen, <code>status</code> auf <code>Offen</code> setzen.
-                  </>
-                )}
-              </p>
+              <h3>{t(props.language, "importGuideTitle")}</h3>
+              <p>{t(props.language, "importGuideP1")}</p>
+              <p>{t(props.language, "importGuideP2")}</p>
+              <p>{t(props.language, "importGuideP3")}</p>
             </div>
           ) : null}
           <div className="card trades-filters-card trades-filters-search-card">
             <label className="trades-single-search">
               <span className="label-with-icon">
                 <Search size={13} />
-                Suche
+                {t(props.language, "search")}
               </span>
-              <input value={props.search} onChange={(event) => props.onSearchChange(event.target.value)} placeholder="Name oder Basiswert..." />
+              <input value={props.search} onChange={(event) => props.onSearchChange(event.target.value)} placeholder={t(props.language, "searchPlaceholder")} />
             </label>
           </div>
           <div className="card trades-filters-card trades-filters-card-main">
             <div className="trades-filters-grid">
               <label>
-                Status
+                {t(props.language, "status")}
                 <select value={props.statusFilter} onChange={(event) => props.onStatusFilterChange(event.target.value as "Alle" | Trade["status"])}>
-                  <option value="Alle">Alle</option>
-                  <option value="Offen">Offen</option>
-                  <option value="Geschlossen">Geschlossen</option>
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="Offen">{t(props.language, "open")}</option>
+                  <option value="Geschlossen">{t(props.language, "closed")}</option>
                 </select>
               </label>
               <label>
-                Typ
+                {t(props.language, "type")}
                 <select value={props.typFilter} onChange={(event) => props.onTypFilterChange(event.target.value)}>
                   {props.availableTypes.map((value) => (
                     <option key={value} value={value}>
@@ -268,7 +250,7 @@ export function TradesView(props: TradesViewProps) {
                 </select>
               </label>
               <label>
-                Basiswert
+                {t(props.language, "basiswert")}
                 <select value={props.basiswertFilter} onChange={(event) => props.onBasiswertFilterChange(event.target.value)}>
                   {props.availableBasiswerte.map((value) => (
                     <option key={value} value={value}>
@@ -278,13 +260,13 @@ export function TradesView(props: TradesViewProps) {
                 </select>
               </label>
               <label>
-                Zeitraum
+                {t(props.language, "range")}
                 <select value={props.rangeFilter} onChange={(event) => props.onRangeFilterChange(event.target.value as "Alle" | "7" | "30" | "90" | "365")}>
-                  <option value="Alle">Alle</option>
-                  <option value="7">7 Tage</option>
-                  <option value="30">30 Tage</option>
-                  <option value="90">90 Tage</option>
-                  <option value="365">365 Tage</option>
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="7">{t(props.language, "days7")}</option>
+                  <option value="30">{t(props.language, "days30")}</option>
+                  <option value="90">{t(props.language, "days90")}</option>
+                  <option value="365">{t(props.language, "days365")}</option>
                 </select>
               </label>
             </div>
@@ -355,29 +337,36 @@ export function TradesView(props: TradesViewProps) {
             <tr>
               <th></th>
               <th onClick={() => props.onToggleSort("kauf")} className="sortable">
-                Kauf{props.sortMarker("kauf")}
+                {t(props.language, "buy")}
+                {props.sortMarker("kauf")}
               </th>
               <th onClick={() => props.onToggleSort("verkauf")} className="sortable">
-                Verkauf{props.sortMarker("verkauf")}
+                {t(props.language, "sell")}
+                {props.sortMarker("verkauf")}
               </th>
               <th onClick={() => props.onToggleSort("name")} className="sortable">
-                Name{props.sortMarker("name")}
+                {t(props.language, "name")}
+                {props.sortMarker("name")}
               </th>
               <th onClick={() => props.onToggleSort("typ")} className="sortable">
-                Typ{props.sortMarker("typ")}
+                {t(props.language, "type")}
+                {props.sortMarker("typ")}
               </th>
-              <th>Basiswert</th>
+              <th>{t(props.language, "basiswert")}</th>
               <th onClick={() => props.onToggleSort("kaufPreis")} className="sortable">
-                Kauf EUR{props.sortMarker("kaufPreis")}
+                {t(props.language, "buyEur")}
+                {props.sortMarker("kaufPreis")}
               </th>
               <th onClick={() => props.onToggleSort("verkaufPreis")} className="sortable">
-                Verkauf EUR{props.sortMarker("verkaufPreis")}
+                {t(props.language, "sellEur")}
+                {props.sortMarker("verkaufPreis")}
               </th>
               <th onClick={() => props.onToggleSort("gewinn")} className="sortable">
-                Gewinn{props.sortMarker("gewinn")}
+                {t(props.language, "profit")}
+                {props.sortMarker("gewinn")}
               </th>
-              <th>%</th>
-              <th>Aktion</th>
+              <th>{t(props.language, "pct")}</th>
+              <th>{t(props.language, "action")}</th>
             </tr>
           </thead>
           <tbody>
@@ -403,10 +392,14 @@ export function TradesView(props: TradesViewProps) {
                 </td>
                 <td>
                   <div className="table-actions">
-                    <button className="icon-btn action edit" title="Bearbeiten" onClick={() => props.onEditTrade(trade)}>
+                    <button className="icon-btn action edit" title={t(props.language, "edit")} onClick={() => props.onEditTrade(trade)}>
                       <Pencil size={13} />
                     </button>
-                    <button className="icon-btn action delete" title="Löschen" onClick={() => props.onDeleteTrade(trade.id)}>
+                    <button
+                      className="icon-btn action delete"
+                      title={t(props.language, "delete")}
+                      onClick={() => props.onDeleteTrade(trade.id)}
+                    >
                       <X size={13} />
                     </button>
                   </div>

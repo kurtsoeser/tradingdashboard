@@ -1,5 +1,6 @@
 import { Bell, Building2, CalendarClock, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Wallet } from "lucide-react";
 import { PageHeader } from "../PageHeader";
+import type { I18nKey } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
 
 interface SettingsViewProps {
@@ -7,7 +8,7 @@ interface SettingsViewProps {
   onSettingsChange: (next: AppSettings) => void;
   onApplyTheme: (theme: "dark" | "light") => void;
   currentTheme: "dark" | "light";
-  t: (key: "navSettings" | "marketStatusPulse") => string;
+  t: (key: I18nKey) => string;
   /** Einmalig fehlende Ticker aus kurierter Liste ergänzen (nur leeres Ticker-Feld). */
   onApplyKnownTickerSuggestions?: () => void;
   knownTickerSuggestionCount?: number;
@@ -204,6 +205,7 @@ export function SettingsView({
                 <option value="trades">Trades</option>
                 <option value="assets">Assets</option>
                 <option value="analytics">Auswertungen</option>
+                <option value="journal">Journal</option>
               </select>
             </label>
           </div>
