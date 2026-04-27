@@ -21,6 +21,8 @@ export interface AssetMeta {
   category?: string;
   /** Ein Ticker: Kürzel (z. B. SAP) oder voll mit Börse (z. B. NYSE:JPM, NASDAQ:AAPL). */
   ticker?: string;
+  isin?: string;
+  wkn?: string;
   waehrung?: string;
 }
 

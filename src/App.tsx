@@ -33,6 +33,7 @@ import { setMoneyFormat } from "./lib/analytics";
 import { t } from "./app/i18n";
 import { normalizeBasiswertKey } from "./data/knownAssetTickers";
 import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
+import { buildReconcileRows } from "./lib/isinWknReconcile";
 
 export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
@@ -287,6 +288,7 @@ export default function App() {
     }),
     [trades, assetMeta]
   );
+  const reconcileRows = useMemo(() => buildReconcileRows(trades, assetMeta), [trades, assetMeta]);
 
   const assetRowsWithMeta = useMemo(() => {
     const byName = new Map(assetRows.map((row) => [row.name.toLowerCase(), row]));
@@ -412,6 +414,7 @@ export default function App() {
     "typ",
     "basiswert",
     "isin",
+    "wkn",
     "notiz",
     "kaufzeitpunkt",
     "stueck",
@@ -431,8 +434,8 @@ export default function App() {
     "status"
   ];
   const templateRows: Array<Array<string | number>> = [
-    ["trade-001", "Apple Swing", "Aktie", "AAPL", "US0378331005", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, "", 1649.5, 147, "Geschlossen"],
-    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "", "Offen"]
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "US0378331005", "865985", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, "", 1649.5, 147, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "", "", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "", "Offen"]
   ];
 
   const downloadImportTemplateCsv = () => {
@@ -522,6 +525,104 @@ export default function App() {
     window.alert(
       `${t(appSettings.language, "mergeDoneTitle")}\n\n${t(appSettings.language, "mergeDoneBody", { substitutions, mergedPairs })}`
     );
+  };
+
+  const applySingleReconcileSuggestion = (rowId: string) => {
+    const row = reconcileRows.find((r) => r.id === rowId);
+    if (!row?.suggestion) return;
+    if (row.kind === "trade") {
+      const tradeId = row.id.replace(/^trade:/, "");
+      setTrades((prev) => {
+        const next = prev.map((trade) =>
+          trade.id === tradeId
+            ? {
+                ...trade,
+                isin: row.suggestion?.isin ?? trade.isin,
+                wkn: row.suggestion?.wkn ?? trade.wkn
+              }
+            : trade
+        );
+        saveTradesToStorage(next);
+        return next;
+      });
+      return;
+    }
+    const key = row.id.replace(/^asset:/, "");
+    setAssetMeta((prev) => {
+      const next = prev.map((meta) =>
+        meta.name.toLowerCase() === key
+          ? {
+              ...meta,
+              isin: row.suggestion?.isin ?? meta.isin,
+              wkn: row.suggestion?.wkn ?? meta.wkn
+            }
+          : meta
+      );
+      saveAssetMetaToStorage(next);
+      return next;
+    });
+  };
+
+  const applyAllReconcileSuggestions = () => {
+    const openRows = reconcileRows.filter((r) => r.status !== "ok" && r.suggestion);
+    if (openRows.length === 0) return;
+
+    const tradeMap = new Map(
+      openRows
+        .filter((r) => r.kind === "trade")
+        .map((r) => [
+          r.id.replace(/^trade:/, ""),
+          {
+            isin: r.suggestion?.isin,
+            wkn: r.suggestion?.wkn
+          }
+        ])
+    );
+    const assetMap = new Map(
+      openRows
+        .filter((r) => r.kind === "asset")
+        .map((r) => [
+          r.id.replace(/^asset:/, ""),
+          {
+            isin: r.suggestion?.isin,
+            wkn: r.suggestion?.wkn
+          }
+        ])
+    );
+
+    if (tradeMap.size > 0) {
+      setTrades((prev) => {
+        const next = prev.map((trade) => {
+          const patch = tradeMap.get(trade.id);
+          return patch
+            ? {
+                ...trade,
+                isin: patch.isin ?? trade.isin,
+                wkn: patch.wkn ?? trade.wkn
+              }
+            : trade;
+        });
+        saveTradesToStorage(next);
+        return next;
+      });
+    }
+
+    if (assetMap.size > 0) {
+      setAssetMeta((prev) => {
+        const next = prev.map((meta) => {
+          const patch = assetMap.get(meta.name.toLowerCase());
+          return patch
+            ? {
+                ...meta,
+                isin: patch.isin ?? meta.isin,
+                wkn: patch.wkn ?? meta.wkn
+              }
+            : meta;
+        });
+        saveAssetMetaToStorage(next);
+        return next;
+      });
+    }
   };
 
   const applyKnownTickerSuggestions = () => {
@@ -629,6 +730,7 @@ export default function App() {
       typ: form.typ,
       basiswert: canonicalizeBasiswert(form.basiswert.trim()),
       isin: form.isin.trim() || undefined,
+      wkn: editingTradeId ? trades.find((trade) => trade.id === editingTradeId)?.wkn : undefined,
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
       kaufPreis,
@@ -674,6 +776,7 @@ export default function App() {
       "typ",
       "basiswert",
       "isin",
+      "wkn",
       "notiz",
       "kaufzeitpunkt",
       "stueck",
@@ -698,6 +801,7 @@ export default function App() {
       trade.typ,
       trade.basiswert,
       trade.isin,
+      trade.wkn,
       trade.notiz,
       trade.kaufzeitpunkt,
       trade.stueck,
@@ -996,6 +1100,9 @@ export default function App() {
             knownTickerSuggestionCount={countKnownTickerKeys()}
             onMergeDuplicateBasiswerte={runMergeDuplicateBasiswerte}
             basiswertMergePreview={basiswertMergePreview}
+            reconcileRows={reconcileRows}
+            onApplyReconcileSuggestion={applySingleReconcileSuggestion}
+            onApplyAllReconcileSuggestions={applyAllReconcileSuggestions}
           />
         )}
       </main>

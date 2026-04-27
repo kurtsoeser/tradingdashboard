@@ -17,6 +17,7 @@ export interface Trade {
   typ: TradeType | string;
   basiswert: string;
   isin?: string;
+  wkn?: string;
   notiz?: string;
   kaufzeitpunkt: string;
   kaufPreis: number;

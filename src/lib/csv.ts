@@ -228,6 +228,7 @@ function parseTradeRows(rows: Row[]): Trade[] {
         typ: (pick(row, "typ", "type", "art") ?? "Aktie") as Trade["typ"],
         basiswert: pick(row, "basiswert", "underlying", "asset") ?? "Unknown",
         isin: pick(row, "isin", "isin_code", "isincode"),
+        wkn: pick(row, "wkn", "wertpapierkennnummer"),
         notiz: pick(row, "notiz", "notizen", "kommentar", "kommentare", "note", "notes"),
         kaufzeitpunkt: pick(row, "kaufzeitpunkt", "kaufdatum", "einstieg") ?? "",
         kaufPreis: parseMoney(kaufStr),

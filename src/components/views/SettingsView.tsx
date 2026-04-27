@@ -15,6 +15,18 @@ interface SettingsViewProps {
   /** Dubletten (z. B. Dell / Dell Technologies) per Regelwerk zusammenführen. */
   onMergeDuplicateBasiswerte?: () => void;
   basiswertMergePreview?: { tradeRenames: number; metaCollapses: number };
+  reconcileRows?: Array<{
+    id: string;
+    kind: "trade" | "asset";
+    label: string;
+    basiswert: string;
+    currentIsin?: string;
+    currentWkn?: string;
+    suggestion?: { isin?: string; wkn?: string; source: string; confidence: number };
+    status: "ok" | "missing" | "uncertain";
+  }>;
+  onApplyReconcileSuggestion?: (rowId: string) => void;
+  onApplyAllReconcileSuggestions?: () => void;
 }
 
 export function SettingsView({
@@ -26,7 +38,10 @@ export function SettingsView({
   onApplyKnownTickerSuggestions,
   knownTickerSuggestionCount,
   onMergeDuplicateBasiswerte,
-  basiswertMergePreview
+  basiswertMergePreview,
+  reconcileRows,
+  onApplyReconcileSuggestion,
+  onApplyAllReconcileSuggestions
 }: SettingsViewProps) {
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     onSettingsChange({ ...settings, [key]: value });
@@ -175,6 +190,80 @@ export function SettingsView({
             <button type="button" className="secondary" onClick={onMergeDuplicateBasiswerte}>
               Dubletten jetzt zusammenführen
             </button>
+          </div>
+        )}
+
+        {reconcileRows && onApplyReconcileSuggestion && (
+          <div className="card settings-card">
+            <h3>
+              <Hash size={14} />
+              ISIN/WKN-Abgleich
+            </h3>
+            <p className="settings-ticker-enrich-hint">
+              Scannt alle Trades und Basiswerte, markiert fehlende oder unsichere ISINs und schlägt Zuordnungen mit Quelle + Confidence vor.
+            </p>
+            <p className="muted-help" style={{ marginTop: "0.35rem" }}>
+              Offen: <strong>{reconcileRows.filter((r) => r.status !== "ok").length}</strong> von <strong>{reconcileRows.length}</strong> Datensätzen.
+            </p>
+            {onApplyAllReconcileSuggestions && (
+              <button type="button" className="secondary" onClick={onApplyAllReconcileSuggestions} style={{ marginBottom: "0.75rem" }}>
+                Alle Vorschläge übernehmen
+              </button>
+            )}
+            <div className="symbol-hit-table-wrap">
+              <table className="symbol-hit-table">
+                <thead>
+                  <tr>
+                    <th>Typ</th>
+                    <th>Name</th>
+                    <th>Aktuell</th>
+                    <th>Vorschlag</th>
+                    <th>Status</th>
+                    <th>Aktion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reconcileRows
+                    .filter((row) => row.status !== "ok")
+                    .slice(0, 120)
+                    .map((row) => (
+                      <tr key={row.id}>
+                        <td>{row.kind === "trade" ? "Trade" : "Basiswert"}</td>
+                        <td>
+                          <div className="symbol-hit-name">
+                            <strong>{row.label}</strong>
+                            <div className="symbol-hit-type">{row.basiswert}</div>
+                          </div>
+                        </td>
+                        <td>
+                          ISIN: <code>{row.currentIsin || "—"}</code>
+                          <br />
+                          WKN: <code>{row.currentWkn || "—"}</code>
+                        </td>
+                        <td>
+                          ISIN: <code>{row.suggestion?.isin || "—"}</code>
+                          <br />
+                          WKN: <code>{row.suggestion?.wkn || "—"}</code>
+                          <div className="symbol-hit-type">
+                            {row.suggestion ? `${row.suggestion.source} · ${Math.round(row.suggestion.confidence * 100)}%` : "Kein Vorschlag"}
+                          </div>
+                        </td>
+                        <td>{row.status === "missing" ? "Fehlend" : "Unsicher"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary slim"
+                            onClick={() => onApplyReconcileSuggestion(row.id)}
+                            disabled={!row.suggestion?.isin && !row.suggestion?.wkn}
+                          >
+                            Übernehmen
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

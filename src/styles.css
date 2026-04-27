@@ -1871,6 +1871,12 @@ button.dashboard-link-card:hover {
   gap: 10px;
 }
 
+.live-provider-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .dashboard-section-head {
   display: flex;
   justify-content: space-between;

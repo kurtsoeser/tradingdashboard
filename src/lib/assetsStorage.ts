@@ -24,9 +24,13 @@ export function normalizeStoredAssetMeta(items: unknown[]): AssetMeta[] {
       const category = typeof o.category === "string" ? o.category.trim() : undefined;
       const waehrung = typeof o.waehrung === "string" ? o.waehrung.trim() : undefined;
       const ticker = mergeLegacyTickerFields(o);
+      const isin = typeof o.isin === "string" ? o.isin.trim().toUpperCase() : undefined;
+      const wkn = typeof o.wkn === "string" ? o.wkn.trim().toUpperCase() : undefined;
       const out: AssetMeta = { name };
       if (category) out.category = category;
       if (ticker) out.ticker = ticker;
+      if (isin) out.isin = isin;
+      if (wkn) out.wkn = wkn;
       if (waehrung) out.waehrung = waehrung;
       return out;
     })
