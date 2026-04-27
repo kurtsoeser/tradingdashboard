@@ -361,6 +361,14 @@ export function NewTradeView({
               />
             </label>
             <label>
+              <span className="field-title">{t(language, "wknInputLabel")}</span>
+              <input
+                value={form.wkn}
+                onChange={(e) => setForm((prev) => ({ ...prev, wkn: e.target.value.toUpperCase() }))}
+                placeholder={t(language, "wknInputPlaceholder")}
+              />
+            </label>
+            <label>
               <span className="field-title">{t(language, "statusAuto")}</span>
               <input value={statusClosed ? t(language, "closed") : t(language, "open")} disabled />
             </label>

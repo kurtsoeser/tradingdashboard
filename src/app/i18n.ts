@@ -70,7 +70,7 @@ const de: Dict = {
   tradesSubtitle: "{filtered} von {total} Trades",
   importGuideTitle: "Import Anleitung",
   importGuideP1:
-    "Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: tradeId, name, typ, basiswert, isin, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell, verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status.",
+    "Lade eine Vorlage herunter und fülle die Spalten wie vorgegeben aus: tradeId, name, typ, basiswert, isin, wkn, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell, verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status.",
   importGuideP2:
     "Formate: CSV oder Excel (.xlsx/.xls). Trennzeichen in CSV ist meist Semikolon (Vorlage). Bei offenem Trade verkaufszeitpunkt, verkaufPreis und gewinn leer lassen, status auf Offen setzen.",
   importGuideP3: "JSON: App-Backup (Trades + Basiswerte) oder klassisches Trade-Array.",
@@ -127,6 +127,7 @@ const de: Dict = {
   liveLookupHint: "Automatisch: ISIN-Prüfung, direkter Ticker (z. B. NASDAQ:AAPL) oder OpenFIGI-Volltextsuche.",
   liveLookupDerivateHint:
     "Derivate-Tipp: Für KO/Turbo/Long/Short ist ISIN oder WKN am zuverlässigsten. Nutze bei Bedarf die Direktlinks zu onvista/finanzen.net/Emittenten darunter.",
+  liveLookupHsbcQuick: "HSBC-Suche (ISIN/WKN) öffnen",
   liveLookupError: "Live-Suche fehlgeschlagen (Netzwerk oder API-Limit).",
   liveLookupNoResults: "Keine passenden Treffer gefunden.",
   liveLookupResultSelect: "Gefundenes Produkt auswählen",
@@ -134,6 +135,8 @@ const de: Dict = {
   liveLookupDirectTicker: "Direkter Ticker",
   isinInputLabel: "ISIN",
   isinInputPlaceholder: "z. B. US0378331005",
+  wknInputLabel: "WKN",
+  wknInputPlaceholder: "z. B. HM4UN0",
   isinInvalidHint: "Bitte eine gültige ISIN eingeben (12 Zeichen, z. B. DE000BASF111).",
   isinLookupError: "ISIN-Suche fehlgeschlagen (Netzwerk oder API-Limit).",
   isinNoResults: "Keine Treffer zu dieser ISIN gefunden.",
@@ -437,7 +440,7 @@ const en: Dict = {
   tradesSubtitle: "{filtered} of {total} trades",
   importGuideTitle: "Import guide",
   importGuideP1:
-    "Download a template and fill the columns as specified: tradeId, name, typ, basiswert, isin, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell, verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status.",
+    "Download a template and fill the columns as specified: tradeId, name, typ, basiswert, isin, wkn, notiz, kaufzeitpunkt, stueck, kaufStueckpreis, kaufTransaktionManuell, kaufGebuehren, kaufPreis, kaufPreisManuell, verkaufszeitpunkt, verkaufStueckpreis, verkaufTransaktionManuell, verkaufSteuern, verkaufGebuehren, verkaufPreisManuell, verkaufPreis, gewinn, status.",
   importGuideP2:
     "Formats: CSV or Excel (.xlsx/.xls). CSV often uses semicolon (see template). For open trades leave verkaufszeitpunkt, verkaufPreis and gewinn empty and set status to Offen.",
   importGuideP3: "JSON: app backup (trades + asset meta) or a legacy trades array.",
@@ -494,6 +497,7 @@ const en: Dict = {
   liveLookupHint: "Auto-detects ISIN, direct ticker (e.g. NASDAQ:AAPL), or OpenFIGI full-text lookup.",
   liveLookupDerivateHint:
     "Derivative tip: for KO/Turbo/Long/Short, ISIN or WKN is most reliable. Use direct links to onvista/finanzen.net/issuers below if needed.",
+  liveLookupHsbcQuick: "Open HSBC search (ISIN/WKN)",
   liveLookupError: "Live lookup failed (network or API limit).",
   liveLookupNoResults: "No matching results found.",
   liveLookupResultSelect: "Select matched product",
@@ -501,6 +505,8 @@ const en: Dict = {
   liveLookupDirectTicker: "Direct ticker",
   isinInputLabel: "ISIN",
   isinInputPlaceholder: "e.g. US0378331005",
+  wknInputLabel: "WKN",
+  wknInputPlaceholder: "e.g. HM4UN0",
   isinInvalidHint: "Please enter a valid ISIN (12 chars, e.g. DE000BASF111).",
   isinLookupError: "ISIN lookup failed (network or API limit).",
   isinNoResults: "No results found for this ISIN.",

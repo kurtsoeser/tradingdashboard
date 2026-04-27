@@ -36,6 +36,7 @@ export interface NewTradeForm {
   typ: TradeFormType;
   basiswert: string;
   isin: string;
+  wkn: string;
   notiz: string;
   kaufzeitpunkt: string;
   stueck: string;
@@ -57,6 +58,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
     typ: "Long",
     basiswert: "",
     isin: "",
+    wkn: "",
     notiz: "",
     kaufzeitpunkt: "",
     stueck: "",

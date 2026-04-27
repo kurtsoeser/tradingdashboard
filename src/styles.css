@@ -1877,6 +1877,16 @@ button.dashboard-link-card:hover {
   gap: 8px;
 }
 
+.live-provider-priority {
+  margin: 6px 0 2px;
+}
+
+.live-priority-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 .dashboard-section-head {
   display: flex;
   justify-content: space-between;

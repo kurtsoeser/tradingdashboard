@@ -147,3 +147,24 @@ export async function searchByIsinOpenFigi(isin: string, signal?: AbortSignal): 
   const filtered = rows.filter((r) => r?.ticker && r?.name && !isFilteredOut(r));
   return [...filtered].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name)).slice(0, 20);
 }
+
+export async function searchByWknOpenFigi(wkn: string, signal?: AbortSignal): Promise<OpenFigiIsinHit[]> {
+  const normalized = wkn.trim().toUpperCase();
+  if (!/^[A-HJ-NPR-Z0-9]{6}$/.test(normalized)) return [];
+
+  const res = await fetch(openFigiMappingUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ idType: "ID_WERTPAPIER", idValue: normalized }]),
+    signal
+  });
+
+  if (!res.ok) {
+    throw new Error(`OpenFIGI: HTTP ${res.status}`);
+  }
+
+  const json = (await res.json()) as Array<{ data?: OpenFigiIsinHit[] }>;
+  const rows = json?.[0]?.data ?? [];
+  const filtered = rows.filter((r) => r?.ticker && r?.name && !isFilteredOut(r));
+  return [...filtered].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name)).slice(0, 20);
+}

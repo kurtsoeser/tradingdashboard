@@ -3,7 +3,7 @@ import { Activity, Search } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
-import { searchByIsinOpenFigi, searchSymbolsOpenFigi, type OpenFigiSearchHit } from "../../lib/openFigiSearch";
+import { searchByIsinOpenFigi, searchByWknOpenFigi, searchSymbolsOpenFigi, type OpenFigiSearchHit } from "../../lib/openFigiSearch";
 import { resolvePlainTickerForTradingView } from "../../data/tickerTradingViewAliases";
 
 interface IsinLiveViewProps {
@@ -42,6 +42,11 @@ export function IsinLiveView({ language, chartTheme }: IsinLiveViewProps) {
       { key: "onemarkets", label: "onemarkets", url: `https://www.onemarkets.de/de/suche.html?q=${q}` }
     ];
   }, [normalizedQuery]);
+  const hsbcPriorityUrl = useMemo(() => {
+    if (!normalizedQuery) return null;
+    if (!isValidIsin && !looksLikeWkn) return null;
+    return `https://www.hsbc-zertifikate.de/home/suche?suchbegriff=${encodeURIComponent(normalizedQuery)}`;
+  }, [normalizedQuery, isValidIsin, looksLikeWkn]);
 
   const runSearch = async () => {
     if (!normalizedQuery) return;
@@ -53,6 +58,12 @@ export function IsinLiveView({ language, chartTheme }: IsinLiveViewProps) {
     try {
       if (isValidIsin) {
         const nextHits = await searchByIsinOpenFigi(normalizedQuery);
+        setHits(nextHits);
+        if (nextHits.length > 0) setSelectedFigi(nextHits[0].figi);
+        return;
+      }
+      if (looksLikeWkn) {
+        const nextHits = await searchByWknOpenFigi(normalizedQuery);
         setHits(nextHits);
         if (nextHits.length > 0) setSelectedFigi(nextHits[0].figi);
         return;
@@ -106,6 +117,13 @@ export function IsinLiveView({ language, chartTheme }: IsinLiveViewProps) {
         <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveLookupHint")}</p>
         {(looksLikeWkn || looksLikeDerivativeText || isValidIsin) && (
           <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveLookupDerivateHint")}</p>
+        )}
+        {hsbcPriorityUrl && (
+          <div className="live-provider-priority">
+            <a className="primary live-priority-link" href={hsbcPriorityUrl} target="_blank" rel="noreferrer">
+              {t(language, "liveLookupHsbcQuick")}
+            </a>
+          </div>
         )}
         {error && <p className="edit-asset-search-error">{error}</p>}
         {providerLinks.length > 0 && (

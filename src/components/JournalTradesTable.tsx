@@ -28,6 +28,7 @@ export function JournalTradesTable({
             <th>{t(language, "type")}</th>
             <th>{t(language, "basiswert")}</th>
             <th>ISIN</th>
+            <th>WKN</th>
             <th>{t(language, "buyEur")}</th>
             <th>{t(language, "sellEur")}</th>
             <th>{t(language, "profit")}</th>
@@ -46,6 +47,7 @@ export function JournalTradesTable({
               <td>{trade.typ}</td>
               <td>{trade.basiswert}</td>
               <td>{trade.isin || "—"}</td>
+              <td>{trade.wkn || "—"}</td>
               <td>{money(trade.kaufPreis)}</td>
               <td>{trade.verkaufPreis !== undefined ? money(trade.verkaufPreis) : "—"}</td>
               <td className={getTradeRealizedPL(trade) >= 0 ? "positive" : "negative"}>
