@@ -7,6 +7,8 @@ import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import { canonicalizeBasiswert, sameBasiswertBucket } from "../../lib/basiswertCanonical";
 import { lookupKnownTickerSuggestion } from "../../data/knownAssetTickers";
 import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
+import { searchByIsinOpenFigi } from "../../lib/openFigiSearch";
+import { resolvePlainTickerForTradingView } from "../../data/tickerTradingViewAliases";
 import type { AppSettings } from "../../app/settings";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
@@ -82,6 +84,11 @@ export function NewTradeView({
 
   const [kaufzeitpunktDisplay, setKaufzeitpunktDisplay] = useState(() => formatDateTimeDisplay(form.kaufzeitpunkt));
   const [verkaufszeitpunktDisplay, setVerkaufszeitpunktDisplay] = useState(() => formatDateTimeDisplay(form.verkaufszeitpunkt));
+  const [isinLookupState, setIsinLookupState] = useState<"idle" | "loading" | "ok" | "empty" | "error">("idle");
+  const [isinLiveSymbol, setIsinLiveSymbol] = useState<string | null>(null);
+
+  const normalizedIsin = form.isin.trim().toUpperCase();
+  const isValidIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalizedIsin);
 
   useEffect(() => {
     setKaufzeitpunktDisplay(formatDateTimeDisplay(form.kaufzeitpunkt));
@@ -215,6 +222,35 @@ export function NewTradeView({
     return assetToTradingViewSymbol(row);
   }, [form.basiswert, assetMeta]);
 
+  useEffect(() => {
+    let aborted = false;
+    const controller = new AbortController();
+    if (!isValidIsin) {
+      setIsinLookupState(normalizedIsin ? "empty" : "idle");
+      setIsinLiveSymbol(null);
+      return () => controller.abort();
+    }
+    setIsinLookupState("loading");
+    setIsinLiveSymbol(null);
+    void searchByIsinOpenFigi(normalizedIsin, controller.signal)
+      .then((hits) => {
+        if (aborted) return;
+        const first = hits[0];
+        const symbol = first?.ticker ? resolvePlainTickerForTradingView(first.ticker) : null;
+        setIsinLiveSymbol(symbol);
+        setIsinLookupState(hits.length > 0 ? "ok" : "empty");
+      })
+      .catch(() => {
+        if (aborted) return;
+        setIsinLookupState("error");
+        setIsinLiveSymbol(null);
+      });
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, [normalizedIsin, isValidIsin]);
+
   const renderMiniBars = (data: Array<{ label: string; value: number }>, mode: "pl" | "count") => {
     if (data.length === 0) {
       return <p className="asset-history-empty">Noch nicht genug Daten.</p>;
@@ -317,6 +353,14 @@ export function NewTradeView({
               />
             </label>
             <label>
+              <span className="field-title">{t(language, "isinInputLabel")}</span>
+              <input
+                value={form.isin}
+                onChange={(e) => setForm((prev) => ({ ...prev, isin: e.target.value.toUpperCase() }))}
+                placeholder={t(language, "isinInputPlaceholder")}
+              />
+            </label>
+            <label>
               <span className="field-title">{t(language, "statusAuto")}</span>
               <input value={statusClosed ? t(language, "closed") : t(language, "open")} disabled />
             </label>
@@ -338,18 +382,37 @@ export function NewTradeView({
           </label>
         </div>
 
-        {basiswertLiveTvSymbol && (
+        {(form.isin.trim() || form.basiswert.trim()) && (
           <div className="card form-card card-span-3 new-trade-basis-chart-card">
             <div className="card-title-row">
               <h3>
                 <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
-                {t(language, "liveChartBasis")}
+                {t(language, "liveChart")}
               </h3>
             </div>
-            <p className="live-chart-hint live-chart-hint-compact">
-              {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basiswertLiveTvSymbol}</code>
-            </p>
-            <TradingViewLiveChart symbol={basiswertLiveTvSymbol} theme={chartTheme} height={340} />
+            <div className="new-trade-live-charts-grid">
+              <div className="new-trade-live-chart-col">
+                <h4 className="live-chart-title">{t(language, "liveChartIsin")}</h4>
+                {isValidIsin && isinLookupState === "loading" && <p className="live-chart-hint live-chart-hint-compact">{t(language, "editAssetSearching")}</p>}
+                {isinLookupState === "error" && <p className="live-chart-empty">{t(language, "isinLookupError")}</p>}
+                {!isValidIsin && normalizedIsin.length > 0 && <p className="live-chart-empty">{t(language, "isinInvalidHint")}</p>}
+                {isValidIsin && isinLookupState === "empty" && <p className="live-chart-empty">{t(language, "isinNoResults")}</p>}
+                {isValidIsin && isinLiveSymbol && <TradingViewLiveChart symbol={isinLiveSymbol} theme={chartTheme} height={320} />}
+              </div>
+              <div className="new-trade-live-chart-col">
+                <h4 className="live-chart-title">{t(language, "liveChartBasis")}</h4>
+                {basiswertLiveTvSymbol ? (
+                  <>
+                    <p className="live-chart-hint live-chart-hint-compact">
+                      {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basiswertLiveTvSymbol}</code>
+                    </p>
+                    <TradingViewLiveChart symbol={basiswertLiveTvSymbol} theme={chartTheme} height={320} />
+                  </>
+                ) : (
+                  <p className="live-chart-empty">{t(language, "enterBasiswertHint")}</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

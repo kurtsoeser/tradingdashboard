@@ -253,6 +253,18 @@ button.primary {
   margin-top: 0;
 }
 
+.new-trade-live-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.new-trade-live-chart-col {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
 .form-card h3 {
   margin: 0;
 }
@@ -1827,6 +1839,38 @@ button.dashboard-link-card:hover {
   padding: 9px 10px;
 }
 
+.isin-live-card {
+  display: grid;
+  gap: 10px;
+}
+
+.isin-search-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.isin-search-label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.isin-search-label input {
+  border: 1px solid var(--border);
+  background: #151518;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.isin-results-card {
+  display: grid;
+  gap: 10px;
+}
+
 .dashboard-section-head {
   display: flex;
   justify-content: space-between;
@@ -2288,6 +2332,9 @@ td.action-col {
   .new-trade-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .new-trade-live-charts-grid {
+    grid-template-columns: 1fr;
+  }
   .card-span-3 {
     grid-column: span 2;
   }
@@ -2349,6 +2396,9 @@ td.action-col {
   .assets-filters-grid {
     grid-template-columns: 1fr;
   }
+  .isin-search-row {
+    grid-template-columns: 1fr;
+  }
   .dashboard-bottom-grid {
     grid-template-columns: 1fr;
   }
@@ -2393,7 +2443,7 @@ td.action-col {
     bottom: 0;
     z-index: 46;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0;
     border-top: 1px solid var(--border);
     background: #111114;
@@ -2474,6 +2524,10 @@ td.action-col {
 
 [data-theme="light"] .mobile-bottom-nav {
   background: #ececf0;
+}
+
+[data-theme="light"] .isin-search-label input {
+  background: #fbfbfd;
 }
 
 @media (max-width: 760px) {

@@ -1,4 +1,4 @@
-import { BarChart3, BookMarked, CandlestickChart, Database, LayoutDashboard, Moon, Settings2, Sun } from "lucide-react";
+import { BarChart3, BookMarked, CandlestickChart, Database, LayoutDashboard, Moon, Search, Settings2, Sun } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { View } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
@@ -64,6 +64,10 @@ export function SidebarNav({
             <BookMarked size={15} />
             {t(language, "navJournal")}
           </button>
+          <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")}>
+            <Search size={15} />
+            {t(language, "navIsinLive")}
+          </button>
         </div>
         <div className="sidebar-theme-switcher">
           <button className={`secondary theme-switch-btn ${view === "settings" ? "active" : ""}`} onClick={() => handleViewChange("settings")}>
@@ -97,6 +101,10 @@ export function SidebarNav({
         <button className={view === "journal" ? "active" : ""} onClick={() => handleViewChange("journal")} aria-label={t(language, "navJournal")}>
           <BookMarked size={16} />
           <span>{t(language, "navJournal")}</span>
+        </button>
+        <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")} aria-label={t(language, "navIsinLive")}>
+          <Search size={16} />
+          <span>{t(language, "navIsinLive")}</span>
         </button>
         <button className={view === "settings" ? "active" : ""} onClick={() => handleViewChange("settings")} aria-label={t(language, "navSettings")}>
           <Settings2 size={16} />

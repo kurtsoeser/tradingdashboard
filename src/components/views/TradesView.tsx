@@ -353,6 +353,7 @@ export function TradesView(props: TradesViewProps) {
                 {props.sortMarker("typ")}
               </th>
               <th>{t(props.language, "basiswert")}</th>
+              <th>ISIN</th>
               <th onClick={() => props.onToggleSort("kaufPreis")} className="sortable">
                 {t(props.language, "buyEur")}
                 {props.sortMarker("kaufPreis")}
@@ -378,6 +379,7 @@ export function TradesView(props: TradesViewProps) {
                 <td>{trade.name}</td>
                 <td>{trade.typ}</td>
                 <td>{trade.basiswert}</td>
+                <td>{trade.isin || "-"}</td>
                 <td>{money(trade.kaufPreis)}</td>
                 <td>{trade.verkaufPreis ? money(trade.verkaufPreis) : "-"}</td>
                 <td className={getTradeRealizedPL(trade) >= 0 ? "positive" : "negative"}>{money(getTradeRealizedPL(trade))}</td>

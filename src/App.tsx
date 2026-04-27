@@ -27,6 +27,7 @@ import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
 import { JournalView } from "./components/views/JournalView";
+import { IsinLiveView } from "./components/views/IsinLiveView";
 import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
 import { setMoneyFormat } from "./lib/analytics";
 import { t } from "./app/i18n";
@@ -410,6 +411,7 @@ export default function App() {
     "name",
     "typ",
     "basiswert",
+    "isin",
     "notiz",
     "kaufzeitpunkt",
     "stueck",
@@ -429,8 +431,8 @@ export default function App() {
     "status"
   ];
   const templateRows: Array<Array<string | number>> = [
-    ["trade-001", "Apple Swing", "Aktie", "AAPL", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, "", 1649.5, 147, "Geschlossen"],
-    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "", "Offen"]
+    ["trade-001", "Apple Swing", "Aktie", "AAPL", "US0378331005", "Ausbruch über Widerstand mit engem SL.", "2026-04-01 10:00", 10, 150, "", 2.5, 1502.5, "", "2026-04-10 15:45", 168, "", 28, 2.5, "", 1649.5, 147, "Geschlossen"],
+    ["trade-002", "BTC Dip Buy", "Long", "BTCUSD", "", "Nachkauf geplant bei erneutem Rücksetzer.", "2026-04-12 09:30", 0.025, 36000, "", 1, 901, "", "", "", "", "", 1, "", "", "", "Offen"]
   ];
 
   const downloadImportTemplateCsv = () => {
@@ -626,6 +628,7 @@ export default function App() {
       name: form.name.trim(),
       typ: form.typ,
       basiswert: canonicalizeBasiswert(form.basiswert.trim()),
+      isin: form.isin.trim() || undefined,
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
       kaufPreis,
@@ -670,6 +673,7 @@ export default function App() {
       "name",
       "typ",
       "basiswert",
+      "isin",
       "notiz",
       "kaufzeitpunkt",
       "stueck",
@@ -693,6 +697,7 @@ export default function App() {
       trade.name,
       trade.typ,
       trade.basiswert,
+      trade.isin,
       trade.notiz,
       trade.kaufzeitpunkt,
       trade.stueck,
@@ -751,6 +756,7 @@ export default function App() {
       name: trade.name,
       typ: trade.typ,
       basiswert: trade.basiswert,
+      isin: trade.isin ?? "",
       notiz: trade.notiz ?? "",
       kaufzeitpunkt: toLocalInputValue(trade.kaufzeitpunkt),
       stueck: `${qty}`,
@@ -968,6 +974,7 @@ export default function App() {
             onDeleteTrade={deleteTrade}
           />
         )}
+        {view === "isinLive" && <IsinLiveView language={appSettings.language} chartTheme={theme} />}
         {view === "analytics" && analyticsData && (
           <AnalyticsView
             language={appSettings.language}

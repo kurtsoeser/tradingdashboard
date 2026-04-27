@@ -1,6 +1,6 @@
 import type { Trade } from "../types/trade";
 
-export type View = "dashboard" | "trades" | "newTrade" | "assets" | "analytics" | "journal" | "settings";
+export type View = "dashboard" | "trades" | "newTrade" | "assets" | "analytics" | "journal" | "isinLive" | "settings";
 export type TradeFormType = Trade["typ"];
 export type TradesSortField = "kauf" | "verkauf" | "name" | "typ" | "kaufPreis" | "verkaufPreis" | "gewinn";
 export type DashboardOpenSortField = "name" | "typ" | "basiswert" | "kaufzeitpunkt" | "kaufPreis" | "stueck";
@@ -33,6 +33,7 @@ export interface NewTradeForm {
   name: string;
   typ: TradeFormType;
   basiswert: string;
+  isin: string;
   notiz: string;
   kaufzeitpunkt: string;
   stueck: string;
@@ -53,6 +54,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
     name: "",
     typ: "Long",
     basiswert: "",
+    isin: "",
     notiz: "",
     kaufzeitpunkt: "",
     stueck: "",

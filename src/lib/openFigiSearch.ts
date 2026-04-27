@@ -12,6 +12,15 @@ export interface OpenFigiSearchHit {
   securityType2: string | null;
 }
 
+export interface OpenFigiIsinHit {
+  figi: string;
+  name: string;
+  ticker: string;
+  exchCode: string | null;
+  securityType: string;
+  securityType2: string | null;
+}
+
 /** Typische Xetra-/Deutschland-Bloomberg-Börsencodes (OpenFIGI exchCode). */
 const GERMAN_DOMESTIC_EXCH = new Set([
   "GR",
@@ -92,6 +101,10 @@ function openFigiSearchUrl(): string {
   return import.meta.env.DEV ? "/openfigi/v3/search" : "https://api.openfigi.com/v3/search";
 }
 
+function openFigiMappingUrl(): string {
+  return import.meta.env.DEV ? "/openfigi/v3/mapping" : "https://api.openfigi.com/v3/mapping";
+}
+
 export async function searchSymbolsOpenFigi(query: string, signal?: AbortSignal): Promise<OpenFigiSearchHit[]> {
   const q = query.trim();
   if (q.length < 2) return [];
@@ -112,4 +125,25 @@ export async function searchSymbolsOpenFigi(query: string, signal?: AbortSignal)
   const filtered = raw.filter((r) => r?.ticker && r?.name && !isFilteredOut(r));
   const scored = [...filtered].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
   return scored.slice(0, 40);
+}
+
+export async function searchByIsinOpenFigi(isin: string, signal?: AbortSignal): Promise<OpenFigiIsinHit[]> {
+  const normalized = isin.trim().toUpperCase();
+  if (!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalized)) return [];
+
+  const res = await fetch(openFigiMappingUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ idType: "ID_ISIN", idValue: normalized }]),
+    signal
+  });
+
+  if (!res.ok) {
+    throw new Error(`OpenFIGI: HTTP ${res.status}`);
+  }
+
+  const json = (await res.json()) as Array<{ data?: OpenFigiIsinHit[] }>;
+  const rows = json?.[0]?.data ?? [];
+  const filtered = rows.filter((r) => r?.ticker && r?.name && !isFilteredOut(r));
+  return [...filtered].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name)).slice(0, 20);
 }
