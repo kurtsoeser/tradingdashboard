@@ -12,7 +12,7 @@ export type View =
   | "isinLive"
   | "settings";
 export type TradeFormType = Trade["typ"];
-export type TradesSortField = "kauf" | "verkauf" | "name" | "typ" | "kaufPreis" | "verkaufPreis" | "gewinn";
+export type TradesSortField = "kauf" | "verkauf" | "name" | "typ" | "kaufPreis" | "verkaufPreis" | "gewinn" | "rendite";
 export type DashboardOpenSortField = "name" | "typ" | "basiswert" | "kaufzeitpunkt" | "kaufPreis" | "stueck";
 export type SortDirection = "asc" | "desc";
 export type AssetSortField = "name" | "category" | "tradesCount" | "realizedPL" | "openCapital";

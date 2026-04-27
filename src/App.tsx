@@ -297,6 +297,18 @@ export default function App() {
     });
 
     return [...base].sort((a, b) => {
+      if (sortField === "rendite") {
+        const pct = (t: Trade) =>
+          isTradeClosed(t) && t.kaufPreis > 0 ? (getTradeRealizedPL(t) / t.kaufPreis) * 100 : null;
+        const pa = pct(a);
+        const pb = pct(b);
+        if (pa == null && pb == null) return 0;
+        if (pa == null) return 1;
+        if (pb == null) return -1;
+        if (pa < pb) return sortDirection === "asc" ? -1 : 1;
+        if (pa > pb) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      }
       let av: string | number = "";
       let bv: string | number = "";
       switch (sortField) {

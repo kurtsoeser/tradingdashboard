@@ -508,10 +508,13 @@ const de: Dict = {
   settingsAiApiKeyHint:
     "Hinweis: localStorage ist nicht verschlüsselt. Auf gemeinsam genutzten Rechnern keinen Key speichern. Für produktive Web-Deployments einen eigenen Proxy ohne Key im Client bevorzugen.",
   settingsAiBackendHint:
-    "Wenn gesetzt: POST mit JSON { provider, model, system, messages }. Antwort als JSON { text: \"…\" } (oder content/message). Authorization: Bearer + unten stehender Key, falls ausgefüllt.",
+    "Wenn gesetzt: POST mit JSON { provider, model, system, messages } und optional geminiGoogleSearchGrounding: true (Gemini: Grounding mit Google Suche durchreichen). Antwort als JSON { text: \"…\" } (oder content/message). Authorization: Bearer + unten stehender Key, falls ausgefüllt.",
+  settingsAiGeminiGroundingLabel: "Google-Suche bei jedem Gemini-Chat (Grounding)",
+  settingsAiGeminiGroundingHint:
+    "Zusätzliche API-Kosten. Der Schnellprompt „Markt-Briefing (Live)“ schaltet Websuche außerdem einmalig für den nächsten Send — ohne diese Option. Funktioniert zuverlässig bei direktem Gemini-Aufruf aus dem Browser; mit Proxy nur, wenn dein Backend das Feld an Gemini weiterreicht.",
   settingsAiProxyHelpTitle: "Proxy-Payload (Kurzreferenz)",
   settingsAiProxyHelpBody:
-    "Beispiel-Body:\n{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-20250514\",\"system\":\"…\",\"messages\":[{\"role\":\"user\",\"content\":\"Hallo\"}]}\n\nDein Server ruft die jeweilige Provider-API auf und setzt den echten API-Key nur serverseitig.",
+    "Beispiel-Body:\n{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-20250514\",\"system\":\"…\",\"messages\":[{\"role\":\"user\",\"content\":\"Hallo\"}]}\n\nFür Gemini mit Websuche kann der Client optional \"geminiGoogleSearchGrounding\":true mitsenden — dein Server sollte das an die Gemini-API (tools: google_search) durchreichen.\n\nDein Server ruft die jeweilige Provider-API auf und setzt den echten API-Key nur serverseitig.",
   chatAssistantSectionTitle: "Chat (Beta)",
   chatAssistantSectionHint:
     "Jede Nachricht sendet den aktuellen Dashboard-Kontext (wie der Journal-KI-Bericht, ohne Prompt-Vorschlag) plus deinen Verlauf an das gewählte Modell.",
@@ -528,6 +531,8 @@ const de: Dict = {
   aiQuickSectionTitle: "Schnellprompts",
   aiQuickSectionHint:
     "Wähle einen Prompt — er landet im Eingabefeld (du kannst ihn noch anpassen), dann Senden. Nutzt automatisch den aktuellen Dashboard-Kontext.",
+  aiQuickLiveBriefingTechHint:
+    "„Markt-Briefing (Live)“: Bei Anbieter Google Gemini wird für den nächsten Send automatisch „Grounding mit Google Suche“ angefragt (aktuelle News/Peers), sofern dein Modell das unterstützt und du nicht über einen Proxy ohne Tool-Weiterleitung gehst. Bei Claude/OpenAI liefert der Prompt eine Such-Checkliste ohne Live-Web im Chat.",
   aiQuickSelectLabel: "Prompt aus Liste",
   aiQuickSelectPlaceholder: "— Prompt wählen —",
   aiKnowledgeCardTitle: "Wissensgrundlage",
@@ -553,7 +558,7 @@ const de: Dict = {
   chatAssistantJournalToastMonth: "KI-Text an aktuellen Journal-Monat angehängt.",
   chatAssistantJournalOpenJournal: "Journal öffnen",
   aiChatSystemPreamble:
-    "Du bist ein hilfreicher Trading-Journal- und Portfolio-Assistent. Nutze ausschließlich die im Systemteil mitgelieferten Daten des Nutzers. Du erteilst keine verbindliche Anlageberatung und keine garantierten Prognosen. Antworte in derselben Sprache wie die Nutzereingaben (Deutsch oder Englisch). Halte Antworten strukturiert und handlungsorientiert.",
+    "Du bist ein hilfreicher Trading-Journal- und Portfolio-Assistent. Nutze die im Systemteil mitgelieferten Dashboard-Daten als verlässliche Faktengrundlage zu Trades und Journal. Wenn die Nutzerfrage ausdrücklich eine aktuelle Markt-, Nachrichten- oder Web-Recherche zu diesen Positionen verlangt, darfst du dafür zeitnahe externe Quellen nutzen (sofern deine Umgebung das erlaubt) und kurz zitieren bzw. Quellen benennen; markiere Unsicherheit, wenn du keinen Live-Zugriff hast. Du erteilst keine verbindliche Anlageberatung und keine garantierten Prognosen. Antworte in derselben Sprache wie die Nutzereingaben (Deutsch oder Englisch). Halte Antworten strukturiert und handlungsorientiert.",
   aiChatDataSectionLabel: "Dashboard-Daten",
   aiChatErrorProviderOff: "KI ist unter Einstellungen auf „Aus“ gestellt.",
   aiChatErrorNoKey: "Es fehlt ein API-Key (oder die Backend-URL ist leer). Bitte in den Einstellungen ergänzen.",
@@ -1070,10 +1075,13 @@ const en: Dict = {
   settingsAiApiKeyHint:
     "Note: localStorage is not encrypted. Do not store keys on shared machines. For production web hosting, prefer your own proxy and keep secrets server-side only.",
   settingsAiBackendHint:
-    "If set: POST JSON { provider, model, system, messages }. Response JSON { \"text\": \"…\" } (or content/message). Authorization: Bearer + the key below when provided.",
+    "If set: POST JSON { provider, model, system, messages } plus optional geminiGoogleSearchGrounding: true (Gemini: forward Google Search grounding). Response JSON { \"text\": \"…\" } (or content/message). Authorization: Bearer + the key below when provided.",
+  settingsAiGeminiGroundingLabel: "Google Search on every Gemini chat (grounding)",
+  settingsAiGeminiGroundingHint:
+    "Extra API cost. The “Market briefing (live)” quick prompt also enables web search for the next send only, without this toggle. Works reliably with direct Gemini from the browser; with a proxy only if your backend forwards the flag to Gemini (tools: google_search).",
   settingsAiProxyHelpTitle: "Proxy payload (quick reference)",
   settingsAiProxyHelpBody:
-    "Example body:\n{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-20250514\",\"system\":\"…\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}\n\nYour server calls the provider API and keeps the real API key server-side only.",
+    "Example body:\n{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-20250514\",\"system\":\"…\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}\n\nFor Gemini with web search, the client may send \"geminiGoogleSearchGrounding\":true — your server should forward that to the Gemini API (google_search tool).\n\nYour server calls the provider API and keeps the real API key server-side only.",
   chatAssistantSectionTitle: "Chat (beta)",
   chatAssistantSectionHint:
     "Each message sends the current dashboard context (like the journal AI report, without the suggested prompt block) plus your conversation to the selected model.",
@@ -1090,6 +1098,8 @@ const en: Dict = {
   aiQuickSectionTitle: "Quick prompts",
   aiQuickSectionHint:
     "Pick a prompt — it fills the input (you can edit), then Send. Uses the current dashboard context automatically.",
+  aiQuickLiveBriefingTechHint:
+    "“Market briefing (live)”: with Google Gemini, the next send automatically requests “Grounding with Google Search” (current news/peers) when your model supports it and you are not using a proxy that drops tools. With Claude/OpenAI, the prompt gives a search checklist without live web in chat.",
   aiQuickSelectLabel: "Prompt from list",
   aiQuickSelectPlaceholder: "— Choose a prompt —",
   aiKnowledgeCardTitle: "Knowledge base",
@@ -1115,7 +1125,7 @@ const en: Dict = {
   chatAssistantJournalToastMonth: "Appended to this month’s journal.",
   chatAssistantJournalOpenJournal: "Open journal",
   aiChatSystemPreamble:
-    "You are a helpful trading journal and portfolio assistant. Use only the user data provided in the system block. You do not provide binding investment advice or guaranteed forecasts. Reply in the same language as the user (German or English). Keep answers structured and actionable.",
+    "You are a helpful trading journal and portfolio assistant. Use the dashboard data in the system block as the factual source for trades and journal. When the user explicitly asks for current market/news or web research about those positions, you may use timely external sources (if your environment allows) and cite them briefly; if you lack live access, say so clearly. You do not provide binding investment advice or guaranteed forecasts. Reply in the same language as the user (German or English). Keep answers structured and actionable.",
   aiChatDataSectionLabel: "Dashboard data",
   aiChatErrorProviderOff: "AI is turned off in Settings.",
   aiChatErrorNoKey: "Missing API key (or backend URL empty). Please fill in Settings.",

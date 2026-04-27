@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileSpreadsheet, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
@@ -359,13 +359,16 @@ export function TradesView(props: TradesViewProps) {
                 {t(props.language, "profit")}
                 {props.sortMarker("gewinn")}
               </th>
-              <th>{t(props.language, "pct")}</th>
+              <th onClick={() => props.onToggleSort("rendite")} className="sortable">
+                {t(props.language, "pct")}
+                {props.sortMarker("rendite")}
+              </th>
               <th>{t(props.language, "action")}</th>
             </tr>
           </thead>
           <tbody>
             {props.filteredTrades.slice(0, 500).map((trade) => (
-              <tr key={trade.id}>
+              <tr key={trade.id} className="trades-row-open-edit" onClick={() => props.onEditTrade(trade)} title={t(props.language, "edit")}>
                 <td>{isTradeClosed(trade) ? <CheckCircle2 size={16} className="status-icon closed" /> : <Circle size={16} className="status-icon open" />}</td>
                 <td>{formatDateTimeAT(trade.kaufzeitpunkt)}</td>
                 <td>{formatDateTimeAT(trade.verkaufszeitpunkt)}</td>
@@ -388,13 +391,14 @@ export function TradesView(props: TradesViewProps) {
                 </td>
                 <td>
                   <div className="table-actions">
-                    <button className="icon-btn action edit" title={t(props.language, "edit")} onClick={() => props.onEditTrade(trade)}>
-                      <Pencil size={13} />
-                    </button>
                     <button
+                      type="button"
                       className="icon-btn action delete"
                       title={t(props.language, "delete")}
-                      onClick={() => props.onDeleteTrade(trade.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onDeleteTrade(trade.id);
+                      }}
                     >
                       <X size={13} />
                     </button>

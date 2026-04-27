@@ -23,6 +23,12 @@ export interface AppSettings {
   aiModel: string;
   aiApiKey: string;
   aiBackendUrl: string;
+  /**
+   * Nur Google Gemini: „Grounding mit Google Suche“ für jede Chat-Anfrage (zusätzliche API-Kosten).
+   * Der Schnellprompt „Markt-Briefing (Live)“ aktiviert Websuche außerdem einmalig für den nächsten Send,
+   * unabhängig von dieser Option — sofern direkter Gemini-Aufruf oder ein Proxy das Feld durchreicht.
+   */
+  aiGeminiGoogleSearchGrounding: boolean;
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -43,7 +49,8 @@ export const defaultAppSettings: AppSettings = {
   aiProvider: "off",
   aiModel: "gemini-1.5-flash",
   aiApiKey: "",
-  aiBackendUrl: ""
+  aiBackendUrl: "",
+  aiGeminiGoogleSearchGrounding: false
 };
 
 export function readStoredAppSettings(): AppSettings {

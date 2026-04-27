@@ -294,10 +294,15 @@ export function AssetsView({
             </tr>
           </thead>
           <tbody>
-            {filteredAssets.map((asset) => (
+            {filteredAssets.map((asset, rowIdx) => (
               <Fragment key={asset.name}>
                 <tr
-                  className={chartAssetName === asset.name ? "asset-row-chart-selected" : undefined}
+                  className={[
+                    rowIdx % 2 === 1 ? "asset-row-zebra" : "",
+                    chartAssetName === asset.name ? "asset-row-chart-selected" : ""
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined}
                   onClick={() => setChartAssetName((prev) => (prev === asset.name ? null : asset.name))}
                 >
                   <td>{asset.name}</td>

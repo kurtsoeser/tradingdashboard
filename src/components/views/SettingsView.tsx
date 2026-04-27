@@ -409,6 +409,19 @@ export function SettingsView({
                 onChange={(e) => update("aiBackendUrl", e.target.value)}
               />
             </label>
+            {settings.aiProvider === "google" ? (
+              <>
+                <label className="settings-toggle settings-span-2">
+                  <span>{t("settingsAiGeminiGroundingLabel")}</span>
+                  <input
+                    type="checkbox"
+                    checked={settings.aiGeminiGoogleSearchGrounding}
+                    onChange={(e) => update("aiGeminiGoogleSearchGrounding", e.target.checked)}
+                  />
+                </label>
+                <p className="settings-field-hint settings-span-2">{t("settingsAiGeminiGroundingHint")}</p>
+              </>
+            ) : null}
           </div>
           <p className="settings-ai-hint">{t("settingsAiApiKeyHint")}</p>
           <p className="settings-ai-hint">{t("settingsAiBackendHint")}</p>

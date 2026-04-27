@@ -329,7 +329,7 @@ export function NewTradeView({
   }, [kaufPreisEffektiv]);
 
   /** Live-Chart unter Kauf/Verkauf/Ergebnis (2/3 Rasterbreite, etwas höher). */
-  const liveChartEmbedHeight = 360;
+  const liveChartEmbedHeight = 500;
 
   const handleStueckChange = (nextStueck: string) => {
     setForm((prev) => {

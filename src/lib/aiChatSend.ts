@@ -11,6 +11,11 @@ export type AiChatSendInput = {
   backendUrl: string;
   system: string;
   messages: AiChatMessage[];
+  /**
+   * Nur sinnvoll bei provider `google`: aktiviert Gemini „Grounding mit Google Suche“ (REST: `tools` mit `google_search`).
+   * Proxy-Backends müssen dieses Feld ggf. an die Gemini-API weitergeben.
+   */
+  geminiGoogleSearchGrounding?: boolean;
 };
 
 export class AiChatSendError extends Error {
@@ -28,6 +33,7 @@ type ProxyPayload = {
   model: string;
   system: string;
   messages: AiChatMessage[];
+  geminiGoogleSearchGrounding?: boolean;
 };
 
 async function sendViaProxy(url: string, bearerOrEmpty: string, body: ProxyPayload): Promise<string> {
@@ -77,7 +83,13 @@ export function normalizeGeminiModelId(raw: string): string {
   return cleaned || fallback;
 }
 
-async function sendGemini(model: string, apiKey: string, system: string, messages: AiChatMessage[]): Promise<string> {
+async function sendGemini(
+  model: string,
+  apiKey: string,
+  system: string,
+  messages: AiChatMessage[],
+  options?: { googleSearchGrounding?: boolean }
+): Promise<string> {
   const mid = normalizeGeminiModelId(model);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(mid)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
   const body: Record<string, unknown> = {
@@ -86,6 +98,9 @@ async function sendGemini(model: string, apiKey: string, system: string, message
   };
   if (system.trim()) {
     body.systemInstruction = { parts: [{ text: system.trim() }] };
+  }
+  if (options?.googleSearchGrounding) {
+    body.tools = [{ google_search: {} }];
   }
   let res: Response;
   try {
@@ -199,7 +214,8 @@ export async function sendAiChatAssistantReply(input: AiChatSendInput): Promise<
     provider: input.provider,
     model: input.model.trim(),
     system: input.system,
-    messages: input.messages
+    messages: input.messages,
+    ...(input.geminiGoogleSearchGrounding ? { geminiGoogleSearchGrounding: true } : {})
   };
   if (backend) {
     return sendViaProxy(backend, key, payload);
@@ -207,7 +223,9 @@ export async function sendAiChatAssistantReply(input: AiChatSendInput): Promise<
 
   switch (input.provider) {
     case "google":
-      return sendGemini(input.model, key, input.system, input.messages);
+      return sendGemini(input.model, key, input.system, input.messages, {
+        googleSearchGrounding: Boolean(input.geminiGoogleSearchGrounding)
+      });
     case "anthropic":
       return sendAnthropic(input.model, key, input.system, input.messages);
     case "openai":

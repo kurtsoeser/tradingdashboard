@@ -1,6 +1,6 @@
 import { BookMarked, CalendarDays, CalendarRange, Loader2, MessageCircle, RefreshCw, RotateCcw, Send, Settings2, Zap } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
-import { getLocalizedQuickPrompts } from "../data/aiQuickPrompts";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { getLocalizedQuickPrompts, LIVE_MARKET_BRIEFING_PROMPT_ID } from "../data/aiQuickPrompts";
 import { t } from "../app/i18n";
 import type { AppSettings } from "../app/settings";
 import { AiChatSendError, sendAiChatAssistantReply, type AiChatMessage } from "../lib/aiChatSend";
@@ -59,6 +59,8 @@ export function AiAssistantChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [quickSelectReset, setQuickSelectReset] = useState(0);
   const [journalToast, setJournalToast] = useState<string | null>(null);
+  /** Nächster Send: Gemini mit Google-Suche (Briefing-Schnellprompt oder Einstellung). */
+  const geminiGroundingNextSendRef = useRef(false);
 
   const contextMarkdown = useMemo(
     () =>
@@ -86,7 +88,8 @@ export function AiAssistantChatPanel({
 
   const quickPrompts = useMemo(() => getLocalizedQuickPrompts(language), [language]);
 
-  const insertQuickPrompt = useCallback((body: string) => {
+  const insertQuickPrompt = useCallback((body: string, enableGeminiSearchGroundingForNextSend?: boolean) => {
+    if (enableGeminiSearchGroundingForNextSend) geminiGroundingNextSendRef.current = true;
     setQuickSelectReset((k) => k + 1);
     setDraft((prev) => {
       const p = prev.trim();
@@ -128,6 +131,11 @@ export function AiAssistantChatPanel({
     setLoading(true);
     setError(null);
 
+    const hadGeminiGroundingOneShot = geminiGroundingNextSendRef.current;
+    const useGeminiGrounding =
+      provider === "google" &&
+      (hadGeminiGroundingOneShot || settings.aiGeminiGoogleSearchGrounding);
+
     try {
       const reply = await sendAiChatAssistantReply({
         provider,
@@ -135,8 +143,10 @@ export function AiAssistantChatPanel({
         apiKey: settings.aiApiKey,
         backendUrl: settings.aiBackendUrl,
         system: systemPrompt,
-        messages: nextMessages
+        messages: nextMessages,
+        geminiGoogleSearchGrounding: useGeminiGrounding
       });
+      if (hadGeminiGroundingOneShot) geminiGroundingNextSendRef.current = false;
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (e) {
       setError(mapChatError(language, e));
@@ -151,6 +161,7 @@ export function AiAssistantChatPanel({
     settings.aiModel,
     settings.aiApiKey,
     settings.aiBackendUrl,
+    settings.aiGeminiGoogleSearchGrounding,
     systemPrompt,
     language
   ]);
@@ -270,6 +281,7 @@ export function AiAssistantChatPanel({
           <span className="ai-quick-title">{t(language, "aiQuickSectionTitle")}</span>
         </div>
         <p className="ai-quick-hint">{t(language, "aiQuickSectionHint")}</p>
+        <p className="ai-quick-hint ai-quick-hint-secondary">{t(language, "aiQuickLiveBriefingTechHint")}</p>
         <label className="ai-quick-select-wrap">
           <span className="ai-quick-select-label">{t(language, "aiQuickSelectLabel")}</span>
           <select
@@ -281,7 +293,7 @@ export function AiAssistantChatPanel({
               const id = e.target.value;
               if (!id || loading) return;
               const item = quickPrompts.find((p) => p.id === id);
-              if (item) insertQuickPrompt(item.body);
+              if (item) insertQuickPrompt(item.body, item.id === LIVE_MARKET_BRIEFING_PROMPT_ID);
             }}
           >
             <option value="">{t(language, "aiQuickSelectPlaceholder")}</option>
@@ -294,7 +306,14 @@ export function AiAssistantChatPanel({
         </label>
         <div className="ai-quick-buttons" role="group" aria-label={t(language, "aiQuickSectionTitle")}>
           {quickPrompts.map((p) => (
-            <button key={p.id} type="button" className="secondary slim ai-quick-btn" disabled={loading} title={p.shortLabel} onClick={() => insertQuickPrompt(p.body)}>
+            <button
+              key={p.id}
+              type="button"
+              className="secondary slim ai-quick-btn"
+              disabled={loading}
+              title={p.shortLabel}
+              onClick={() => insertQuickPrompt(p.body, p.id === LIVE_MARKET_BRIEFING_PROMPT_ID)}
+            >
               {p.shortLabel}
             </button>
           ))}
@@ -304,7 +323,7 @@ export function AiAssistantChatPanel({
       <div className="ai-chat-composer">
         <textarea
           className="ai-chat-input"
-          rows={3}
+          rows={6}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
