@@ -27,14 +27,24 @@ import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
 import { JournalView } from "./components/views/JournalView";
+import { AiAssistantPlanView } from "./components/views/AiAssistantPlanView";
 import { AiAssistantView } from "./components/views/AiAssistantView";
 import { IsinLiveView } from "./components/views/IsinLiveView";
 import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
 import { setMoneyFormat } from "./lib/analytics";
 import { t } from "./app/i18n";
 import { normalizeBasiswertKey } from "./data/knownAssetTickers";
+import { loadAiKnowledgeFromStorage, saveAiKnowledgeToStorage } from "./lib/aiKnowledgeStorage";
 import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
+import { toIsoWeekKey, toLocalYmd } from "./lib/journalIsoWeek";
 import { buildReconcileRows } from "./lib/isinWknReconcile";
+
+function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: string): string {
+  const c = existing.trimEnd();
+  const b = block.trim();
+  if (!b) return c;
+  return c ? `${c}\n\n---\n\n${heading}\n\n${b}` : `${heading}\n\n${b}`;
+}
 
 export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
@@ -78,6 +88,7 @@ export default function App() {
   const [assetMeta, setAssetMeta] = useState<AssetMeta[]>(() => loadAssetMetaFromStorage());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [journalData, setJournalData] = useState<JournalData>(() => loadJournalFromStorage());
+  const [aiKnowledgeBase, setAiKnowledgeBase] = useState(() => loadAiKnowledgeFromStorage());
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
@@ -114,6 +125,45 @@ export default function App() {
       const trimmed = text.trim();
       if (trimmed) byMonth[ym] = text;
       else delete byMonth[ym];
+      const next = { ...prev, byMonth };
+      saveJournalToStorage(next);
+      return next;
+    });
+  };
+
+  const handleAiKnowledgeBaseChange = (text: string) => {
+    setAiKnowledgeBase(text);
+    saveAiKnowledgeToStorage(text);
+  };
+
+  const handleAppendAiToJournal = (target: "day" | "week" | "month", markdown: string) => {
+    const block = markdown.trim();
+    if (!block) return;
+    const now = new Date();
+    const locale = getLanguageLocale(appSettings.language);
+    const stand = now.toLocaleString(locale, { dateStyle: "short", timeStyle: "short" });
+    const heading = t(appSettings.language, "journalAiPasteBlockTitle", { stand });
+
+    setJournalData((prev) => {
+      if (target === "day") {
+        const ymd = toLocalYmd(now);
+        const byDay = { ...prev.byDay };
+        byDay[ymd] = mergeAiMarkdownIntoJournal(byDay[ymd] ?? "", heading, block);
+        const next = { ...prev, byDay };
+        saveJournalToStorage(next);
+        return next;
+      }
+      if (target === "week") {
+        const weekKey = toIsoWeekKey(now);
+        const byWeek = { ...prev.byWeek };
+        byWeek[weekKey] = mergeAiMarkdownIntoJournal(byWeek[weekKey] ?? "", heading, block);
+        const next = { ...prev, byWeek };
+        saveJournalToStorage(next);
+        return next;
+      }
+      const ym = toLocalYmd(now).slice(0, 7);
+      const byMonth = { ...prev.byMonth };
+      byMonth[ym] = mergeAiMarkdownIntoJournal(byMonth[ym] ?? "", heading, block);
       const next = { ...prev, byMonth };
       saveJournalToStorage(next);
       return next;
@@ -1115,6 +1165,17 @@ export default function App() {
             journalData={journalData}
             onOpenJournal={() => setView("journal")}
             onOpenSettings={() => setView("settings")}
+            onOpenAiRoadmap={() => setView("aiAssistantPlan")}
+            onAppendAiToJournal={handleAppendAiToJournal}
+            aiKnowledgeBase={aiKnowledgeBase}
+            onAiKnowledgeBaseChange={handleAiKnowledgeBaseChange}
+          />
+        )}
+        {view === "aiAssistantPlan" && (
+          <AiAssistantPlanView
+            language={appSettings.language}
+            onBackToAssistant={() => setView("aiAssistant")}
+            onOpenJournal={() => setView("journal")}
           />
         )}
         {view === "isinLive" && <IsinLiveView language={appSettings.language} chartTheme={theme} />}

@@ -1,5 +1,6 @@
-import { Loader2, MessageCircle, RefreshCw, RotateCcw, Send, Settings2 } from "lucide-react";
+import { BookMarked, CalendarDays, CalendarRange, Loader2, MessageCircle, RefreshCw, RotateCcw, Send, Settings2, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { getLocalizedQuickPrompts } from "../data/aiQuickPrompts";
 import { t } from "../app/i18n";
 import type { AppSettings } from "../app/settings";
 import { AiChatSendError, sendAiChatAssistantReply, type AiChatMessage } from "../lib/aiChatSend";
@@ -12,7 +13,10 @@ interface AiAssistantChatPanelProps {
   settings: AppSettings;
   trades: Trade[];
   journalData: JournalData;
+  knowledgeBase: string;
   onOpenSettings: () => void;
+  onOpenJournal: () => void;
+  onAppendAiToJournal: (target: "day" | "week" | "month", markdown: string) => void;
 }
 
 function mapChatError(language: AppSettings["language"], err: unknown): string {
@@ -38,12 +42,23 @@ function mapChatError(language: AppSettings["language"], err: unknown): string {
   return err instanceof Error ? err.message : t(language, "aiChatErrorNetwork");
 }
 
-export function AiAssistantChatPanel({ language, settings, trades, journalData, onOpenSettings }: AiAssistantChatPanelProps) {
+export function AiAssistantChatPanel({
+  language,
+  settings,
+  trades,
+  journalData,
+  knowledgeBase,
+  onOpenSettings,
+  onOpenJournal,
+  onAppendAiToJournal
+}: AiAssistantChatPanelProps) {
   const [contextRev, setContextRev] = useState(0);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quickSelectReset, setQuickSelectReset] = useState(0);
+  const [journalToast, setJournalToast] = useState<string | null>(null);
 
   const contextMarkdown = useMemo(
     () =>
@@ -57,12 +72,42 @@ export function AiAssistantChatPanel({ language, settings, trades, journalData, 
     [language, trades, journalData, contextRev]
   );
 
-  const systemPrompt = useMemo(
-    () => `${t(language, "aiChatSystemPreamble")}\n\n--- ${t(language, "aiChatDataSectionLabel")} ---\n\n${contextMarkdown}`,
-    [language, contextMarkdown]
-  );
+  const systemPrompt = useMemo(() => {
+    const preamble = t(language, "aiChatSystemPreamble");
+    const kb = knowledgeBase.trim();
+    const kbBlock = kb
+      ? `\n\n--- ${t(language, "aiChatKnowledgeUserSection")} ---\n\n${kb}`
+      : "";
+    const dataBlock = `\n\n--- ${t(language, "aiChatDataSectionLabel")} ---\n\n${contextMarkdown}`;
+    return `${preamble}${kbBlock}${dataBlock}`;
+  }, [language, contextMarkdown, knowledgeBase]);
 
   const provider = settings.aiProvider;
+
+  const quickPrompts = useMemo(() => getLocalizedQuickPrompts(language), [language]);
+
+  const insertQuickPrompt = useCallback((body: string) => {
+    setQuickSelectReset((k) => k + 1);
+    setDraft((prev) => {
+      const p = prev.trim();
+      return p ? `${p}\n\n${body}` : body;
+    });
+  }, []);
+
+  const pushAiToJournal = useCallback(
+    (target: "day" | "week" | "month", markdown: string) => {
+      onAppendAiToJournal(target, markdown);
+      const key =
+        target === "day"
+          ? "chatAssistantJournalToastDay"
+          : target === "week"
+            ? "chatAssistantJournalToastWeek"
+            : "chatAssistantJournalToastMonth";
+      setJournalToast(t(language, key));
+      window.setTimeout(() => setJournalToast(null), 4500);
+    },
+    [language, onAppendAiToJournal]
+  );
 
   const clearChat = useCallback(() => {
     setMessages([]);
@@ -150,6 +195,16 @@ export function AiAssistantChatPanel({ language, settings, trades, journalData, 
       </div>
       <p className="ai-chat-hint">{t(language, "chatAssistantSectionHint")}</p>
 
+      {journalToast ? (
+        <div className="ai-chat-toast" role="status">
+          <span>{journalToast}</span>
+          <button type="button" className="secondary slim" onClick={onOpenJournal}>
+            <BookMarked size={14} aria-hidden />
+            {t(language, "chatAssistantJournalOpenJournal")}
+          </button>
+        </div>
+      ) : null}
+
       <div className="ai-chat-messages" aria-live="polite">
         {messages.length === 0 && !loading ? (
           <p className="ai-chat-empty">{t(language, "chatAssistantEmptyState")}</p>
@@ -158,6 +213,41 @@ export function AiAssistantChatPanel({ language, settings, trades, journalData, 
           <div key={`${i}-${m.role}`} className={`ai-chat-bubble ai-chat-bubble-${m.role}`}>
             <span className="ai-chat-role">{m.role === "user" ? t(language, "chatAssistantRoleUser") : t(language, "chatAssistantRoleAssistant")}</span>
             <div className="ai-chat-bubble-body">{m.content}</div>
+            {m.role === "assistant" ? (
+              <div className="ai-chat-bubble-actions">
+                <span className="ai-chat-bubble-actions-label">{t(language, "chatAssistantJournalActionsLabel")}</span>
+                <button
+                  type="button"
+                  className="secondary slim ai-chat-journal-btn"
+                  disabled={loading}
+                  title={t(language, "chatAssistantJournalBtnDayTitle")}
+                  onClick={() => pushAiToJournal("day", m.content)}
+                >
+                  <CalendarDays size={14} aria-hidden />
+                  {t(language, "chatAssistantJournalBtnDay")}
+                </button>
+                <button
+                  type="button"
+                  className="secondary slim ai-chat-journal-btn"
+                  disabled={loading}
+                  title={t(language, "chatAssistantJournalBtnWeekTitle")}
+                  onClick={() => pushAiToJournal("week", m.content)}
+                >
+                  <BookMarked size={14} aria-hidden />
+                  {t(language, "chatAssistantJournalBtnWeek")}
+                </button>
+                <button
+                  type="button"
+                  className="secondary slim ai-chat-journal-btn"
+                  disabled={loading}
+                  title={t(language, "chatAssistantJournalBtnMonthTitle")}
+                  onClick={() => pushAiToJournal("month", m.content)}
+                >
+                  <CalendarRange size={14} aria-hidden />
+                  {t(language, "chatAssistantJournalBtnMonth")}
+                </button>
+              </div>
+            ) : null}
           </div>
         ))}
         {loading ? (
@@ -173,6 +263,43 @@ export function AiAssistantChatPanel({ language, settings, trades, journalData, 
           {error}
         </pre>
       ) : null}
+
+      <div className="ai-quick-prompts">
+        <div className="ai-quick-head">
+          <Zap size={15} aria-hidden />
+          <span className="ai-quick-title">{t(language, "aiQuickSectionTitle")}</span>
+        </div>
+        <p className="ai-quick-hint">{t(language, "aiQuickSectionHint")}</p>
+        <label className="ai-quick-select-wrap">
+          <span className="ai-quick-select-label">{t(language, "aiQuickSelectLabel")}</span>
+          <select
+            key={quickSelectReset}
+            className="ai-quick-select"
+            aria-label={t(language, "aiQuickSelectLabel")}
+            value=""
+            onChange={(e) => {
+              const id = e.target.value;
+              if (!id || loading) return;
+              const item = quickPrompts.find((p) => p.id === id);
+              if (item) insertQuickPrompt(item.body);
+            }}
+          >
+            <option value="">{t(language, "aiQuickSelectPlaceholder")}</option>
+            {quickPrompts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.shortLabel}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="ai-quick-buttons" role="group" aria-label={t(language, "aiQuickSectionTitle")}>
+          {quickPrompts.map((p) => (
+            <button key={p.id} type="button" className="secondary slim ai-quick-btn" disabled={loading} title={p.shortLabel} onClick={() => insertQuickPrompt(p.body)}>
+              {p.shortLabel}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="ai-chat-composer">
         <textarea

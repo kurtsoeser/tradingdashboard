@@ -2570,7 +2570,7 @@ td.action-col {
     bottom: 0;
     z-index: 46;
     display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 0;
     border-top: 1px solid var(--border);
     background: #111114;
@@ -2761,6 +2761,24 @@ td.action-col {
   align-items: center;
 }
 
+.ai-assistant-main-page .page-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-assistant-plan-toolbar {
+  margin: 0 0 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-assistant-plan-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ai-assistant-badge {
   display: inline-block;
   font-size: 11px;
@@ -2847,6 +2865,39 @@ td.action-col {
   margin-bottom: 14px;
 }
 
+.ai-knowledge-card {
+  margin-bottom: 14px;
+}
+
+.ai-knowledge-head h3 {
+  margin: 0 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ai-knowledge-sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  opacity: 0.92;
+}
+
+.ai-knowledge-foot {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.ai-knowledge-card .journal-md-root {
+  margin-top: 0;
+}
+
 .ai-chat-head {
   display: flex;
   flex-wrap: wrap;
@@ -2928,6 +2979,43 @@ td.action-col {
   padding: 2px 0;
 }
 
+.ai-chat-bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.ai-chat-bubble-actions-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.ai-chat-journal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px !important;
+}
+
+.ai-chat-toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(80, 160, 120, 0.12);
+  font-size: 13px;
+}
+
 .ai-chat-loading {
   display: flex;
   align-items: center;
@@ -2988,6 +3076,70 @@ td.action-col {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.ai-quick-prompts {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-quick-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ai-quick-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ai-quick-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.ai-quick-select-wrap {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ai-quick-select-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ai-quick-select {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+[data-theme="light"] .ai-quick-select {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.ai-quick-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-quick-btn {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
 }
 
 .journal-card .journal-toolbar {

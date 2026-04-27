@@ -1,4 +1,4 @@
-import { BarChart3, BookMarked, CandlestickChart, Database, LayoutDashboard, Moon, Search, Settings2, Sparkles, Sun } from "lucide-react";
+import { BarChart3, BookMarked, CandlestickChart, Database, LayoutDashboard, Moon, Route, Search, Settings2, Sparkles, Sun } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { View } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
@@ -68,6 +68,10 @@ export function SidebarNav({
             <Sparkles size={15} />
             {t(language, "navAiAssistant")}
           </button>
+          <button className={view === "aiAssistantPlan" ? "active" : ""} onClick={() => handleViewChange("aiAssistantPlan")}>
+            <Route size={15} />
+            {t(language, "navAiRoadmap")}
+          </button>
           <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")}>
             <Search size={15} />
             {t(language, "navIsinLive")}
@@ -109,6 +113,10 @@ export function SidebarNav({
         <button className={view === "aiAssistant" ? "active" : ""} onClick={() => handleViewChange("aiAssistant")} aria-label={t(language, "navAiAssistant")}>
           <Sparkles size={16} />
           <span>{t(language, "navAiAssistant")}</span>
+        </button>
+        <button className={view === "aiAssistantPlan" ? "active" : ""} onClick={() => handleViewChange("aiAssistantPlan")} aria-label={t(language, "navAiRoadmap")}>
+          <Route size={16} />
+          <span>{t(language, "navAiRoadmap")}</span>
         </button>
         <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")} aria-label={t(language, "navIsinLive")}>
           <Search size={16} />

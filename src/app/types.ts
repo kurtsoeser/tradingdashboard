@@ -8,6 +8,7 @@ export type View =
   | "analytics"
   | "journal"
   | "aiAssistant"
+  | "aiAssistantPlan"
   | "isinLive"
   | "settings";
 export type TradeFormType = Trade["typ"];

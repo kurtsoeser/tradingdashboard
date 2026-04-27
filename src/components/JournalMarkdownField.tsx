@@ -25,9 +25,24 @@ interface JournalMarkdownFieldProps {
   onChange: (next: string) => void;
   onBlur: () => void;
   placeholder: string;
+  /** Optional: Vorschau-Karten-Titel (Standard: Journal-Notizen). */
+  previewCardTitle?: string;
+  /** Optional: Editor-Karten-Titel. */
+  editingCardTitle?: string;
+  /** Optional: Hinweis bei leerem Vorschau-Inhalt. */
+  emptyPreviewHint?: string;
 }
 
-export function JournalMarkdownField({ language, value, onChange, onBlur, placeholder }: JournalMarkdownFieldProps) {
+export function JournalMarkdownField({
+  language,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  previewCardTitle,
+  editingCardTitle,
+  emptyPreviewHint
+}: JournalMarkdownFieldProps) {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,7 +61,7 @@ export function JournalMarkdownField({ language, value, onChange, onBlur, placeh
         <div className="journal-md-preview-card journal-md-preview-card--main">
           <div className="journal-md-card-head">
             <div className="journal-md-card-head-left">
-              <span className="journal-md-card-title">{t(language, "journalNotesLabel")}</span>
+              <span className="journal-md-card-title">{previewCardTitle ?? t(language, "journalNotesLabel")}</span>
               <span className="journal-md-badge">Markdown</span>
             </div>
             <button
@@ -65,14 +80,14 @@ export function JournalMarkdownField({ language, value, onChange, onBlur, placeh
                 {value}
               </ReactMarkdown>
             ) : (
-              <p className="journal-md-empty">{t(language, "journalMdPreviewEmpty")}</p>
+              <p className="journal-md-empty">{emptyPreviewHint ?? t(language, "journalMdPreviewEmpty")}</p>
             )}
           </div>
         </div>
       ) : (
         <div className="journal-md-editor-card">
           <div className="journal-md-card-head">
-            <span className="journal-md-card-title">{t(language, "journalMdEditingTitle")}</span>
+            <span className="journal-md-card-title">{editingCardTitle ?? t(language, "journalMdEditingTitle")}</span>
             <button
               type="button"
               className="icon-btn journal-md-head-btn journal-md-done-btn"
