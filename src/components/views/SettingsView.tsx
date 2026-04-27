@@ -1,4 +1,4 @@
-import { Bell, Building2, CalendarClock, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Wallet } from "lucide-react";
+import { Bell, Building2, CalendarClock, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { PageHeader } from "../PageHeader";
 import type { I18nKey } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
@@ -298,6 +298,62 @@ export function SettingsView({
               </select>
             </label>
           </div>
+        </div>
+
+        <div className="card settings-card settings-card-span">
+          <h3>
+            <Sparkles size={14} />
+            {t("settingsSectionAiTitle")}
+          </h3>
+          <p className="settings-ai-lead">{t("settingsAiLead")}</p>
+          <div className="settings-form-grid settings-form-grid-2col">
+            <label className="settings-span-2">
+              {t("settingsAiProviderLabel")}
+              <select value={settings.aiProvider} onChange={(e) => update("aiProvider", e.target.value as AppSettings["aiProvider"])}>
+                <option value="off">{t("settingsAiProviderOff")}</option>
+                <option value="google">{t("settingsAiProviderGoogle")}</option>
+                <option value="anthropic">{t("settingsAiProviderAnthropic")}</option>
+                <option value="openai">{t("settingsAiProviderOpenai")}</option>
+              </select>
+            </label>
+            <label className="settings-span-2">
+              {t("settingsAiModelLabel")}
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder={t("settingsAiModelPlaceholder")}
+                value={settings.aiModel}
+                onChange={(e) => update("aiModel", e.target.value)}
+              />
+              <span className="settings-field-hint">{t("settingsAiModelFormatHint")}</span>
+            </label>
+            <label className="settings-span-2">
+              {t("settingsAiApiKeyLabel")}
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder={t("settingsAiApiKeyPlaceholder")}
+                value={settings.aiApiKey}
+                onChange={(e) => update("aiApiKey", e.target.value)}
+              />
+            </label>
+            <label className="settings-span-2">
+              {t("settingsAiBackendLabel")}
+              <input
+                type="url"
+                autoComplete="off"
+                placeholder={t("settingsAiBackendPlaceholder")}
+                value={settings.aiBackendUrl}
+                onChange={(e) => update("aiBackendUrl", e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="settings-ai-hint">{t("settingsAiApiKeyHint")}</p>
+          <p className="settings-ai-hint">{t("settingsAiBackendHint")}</p>
+          <details className="settings-ai-details">
+            <summary>{t("settingsAiProxyHelpTitle")}</summary>
+            <p className="settings-ai-proxy-body">{t("settingsAiProxyHelpBody")}</p>
+          </details>
         </div>
 
         <div className="card settings-card">

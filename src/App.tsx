@@ -27,6 +27,7 @@ import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
 import { JournalView } from "./components/views/JournalView";
+import { AiAssistantView } from "./components/views/AiAssistantView";
 import { IsinLiveView } from "./components/views/IsinLiveView";
 import { defaultAppSettings, getLanguageLocale, readStoredAppSettings, type AppSettings } from "./app/settings";
 import { setMoneyFormat } from "./lib/analytics";
@@ -1104,6 +1105,16 @@ export default function App() {
             onJournalMonthChange={handleJournalMonthChange}
             onEditTrade={editTrade}
             onDeleteTrade={deleteTrade}
+          />
+        )}
+        {view === "aiAssistant" && (
+          <AiAssistantView
+            language={appSettings.language}
+            settings={appSettings}
+            trades={trades}
+            journalData={journalData}
+            onOpenJournal={() => setView("journal")}
+            onOpenSettings={() => setView("settings")}
           />
         )}
         {view === "isinLive" && <IsinLiveView language={appSettings.language} chartTheme={theme} />}

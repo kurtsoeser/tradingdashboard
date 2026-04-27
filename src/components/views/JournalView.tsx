@@ -17,6 +17,7 @@ import { PageHeader } from "../PageHeader";
 import { JournalMarkdownField } from "../JournalMarkdownField";
 import { JournalDayTradesPanel } from "../JournalDayTradesPanel";
 import { JournalMonthTradesPanel } from "../JournalMonthTradesPanel";
+import { JournalAiReportPanel } from "../JournalAiReportPanel";
 import { JournalWeekTradesPanel } from "../JournalWeekTradesPanel";
 import type { Trade } from "../../types/trade";
 
@@ -149,6 +150,8 @@ export function JournalView({
         }
         subtitle={t(language, "journalSubtitle")}
       />
+
+      <JournalAiReportPanel language={language} trades={trades} journalData={journalData} />
 
       <div className="analytics-tabbar journal-tabbar">
         <button type="button" className={mode === "month" ? "secondary active" : "secondary"} onClick={() => setMode("month")}>

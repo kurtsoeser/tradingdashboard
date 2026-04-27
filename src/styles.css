@@ -2294,11 +2294,65 @@ td.action-col {
   gap: 10px;
 }
 
+.settings-form-grid-2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-card-span {
+  grid-column: 1 / -1;
+}
+
+.settings-span-2 {
+  grid-column: 1 / -1;
+}
+
+.settings-ai-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  opacity: 0.92;
+}
+
+.settings-ai-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.settings-ai-details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.settings-ai-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.settings-ai-proxy-body {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
 .settings-form-grid label {
   display: grid;
   gap: 6px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.settings-field-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  opacity: 0.95;
+  font-weight: 400;
 }
 
 .settings-form-grid select,
@@ -2516,7 +2570,7 @@ td.action-col {
     bottom: 0;
     z-index: 46;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 0;
     border-top: 1px solid var(--border);
     background: #111114;
@@ -2614,6 +2668,326 @@ td.action-col {
 
 .journal-tabbar {
   margin-top: 4px;
+}
+
+.journal-ai-report-card {
+  margin-bottom: 14px;
+}
+
+.journal-ai-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.journal-ai-report-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.journal-ai-report-title {
+  margin: 0 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.journal-ai-report-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+
+.journal-ai-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.journal-ai-report-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journal-ai-report-status {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.journal-ai-report-status.is-ok {
+  color: var(--positive, #4caf50);
+}
+
+.journal-ai-report-status.is-error {
+  color: var(--negative, #f44336);
+}
+
+.journal-ai-report-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+
+.journal-ai-report-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--surface-elevated, rgba(0, 0, 0, 0.25));
+  color: inherit;
+}
+
+[data-theme="light"] .journal-ai-report-textarea {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.ai-assistant-page .page-header-actions {
+  align-items: center;
+}
+
+.ai-assistant-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(120, 120, 200, 0.12);
+  color: var(--muted);
+}
+
+.ai-assistant-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+@media (min-width: 900px) {
+  .ai-assistant-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .ai-assistant-card-span {
+    grid-column: 1 / -1;
+  }
+}
+
+.ai-assistant-card h3 {
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ai-assistant-prose {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.ai-assistant-prose p {
+  margin: 0 0 10px;
+}
+
+.ai-assistant-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-assistant-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.ai-assistant-list li {
+  margin-bottom: 8px;
+}
+
+.ai-assistant-list li:last-child {
+  margin-bottom: 0;
+}
+
+.ai-assistant-list-numbered {
+  list-style: decimal;
+}
+
+.ai-assistant-cta-card .primary {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-chat-panel {
+  margin-bottom: 14px;
+}
+
+.ai-chat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ai-chat-head h3 {
+  margin: 0;
+}
+
+.ai-chat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-chat-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.ai-chat-messages {
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.18);
+  margin-bottom: 10px;
+}
+
+[data-theme="light"] .ai-chat-messages {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.ai-chat-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ai-chat-bubble {
+  margin-bottom: 12px;
+}
+
+.ai-chat-bubble:last-child {
+  margin-bottom: 0;
+}
+
+.ai-chat-role {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.ai-chat-bubble-body {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-chat-bubble-user .ai-chat-bubble-body {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(80, 120, 200, 0.15);
+}
+
+.ai-chat-bubble-assistant .ai-chat-bubble-body {
+  padding: 2px 0;
+}
+
+.ai-chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ai-chat-spinner {
+  animation: ai-chat-spin 0.9s linear infinite;
+}
+
+@keyframes ai-chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-chat-error {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 8px;
+  border: 1px solid rgba(244, 67, 54, 0.35);
+  background: rgba(244, 67, 54, 0.08);
+  color: var(--text);
+}
+
+.ai-chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-chat-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-family: inherit;
+}
+
+[data-theme="light"] .ai-chat-input {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.ai-chat-send {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .journal-card .journal-toolbar {

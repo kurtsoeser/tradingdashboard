@@ -1,5 +1,8 @@
 export type StartView = "dashboard" | "trades" | "assets" | "analytics" | "journal";
 
+/** „off“ = kein API-Aufruf aus der App. */
+export type AiProvider = "off" | "google" | "anthropic" | "openai";
+
 export interface AppSettings {
   currency: "EUR" | "USD" | "CHF" | "GBP";
   timezone: "Europe/Vienna" | "Europe/Berlin" | "UTC" | "America/New_York";
@@ -15,6 +18,11 @@ export interface AppSettings {
   defaultSellFees: number;
   weekStartsOn: "monday" | "sunday";
   financeService: "google" | "yahoo" | "tradingview" | "investing";
+  /** KI-Chat: Anbieter, Modell, optional API-Key und optional Proxy-URL (empfohlen für Anthropic/OpenAI im Browser). */
+  aiProvider: AiProvider;
+  aiModel: string;
+  aiApiKey: string;
+  aiBackendUrl: string;
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -31,7 +39,11 @@ export const defaultAppSettings: AppSettings = {
   defaultBuyFees: 1,
   defaultSellFees: 1,
   weekStartsOn: "monday",
-  financeService: "google"
+  financeService: "google",
+  aiProvider: "off",
+  aiModel: "gemini-1.5-flash",
+  aiApiKey: "",
+  aiBackendUrl: ""
 };
 
 export function readStoredAppSettings(): AppSettings {
