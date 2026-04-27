@@ -64,14 +64,20 @@ export function SidebarNav({
             <BookMarked size={15} />
             {t(language, "navJournal")}
           </button>
-          <button className={view === "aiAssistant" ? "active" : ""} onClick={() => handleViewChange("aiAssistant")}>
-            <Sparkles size={15} />
-            {t(language, "navAiAssistant")}
-          </button>
-          <button className={view === "aiAssistantPlan" ? "active" : ""} onClick={() => handleViewChange("aiAssistantPlan")}>
-            <Route size={15} />
-            {t(language, "navAiRoadmap")}
-          </button>
+          <div className={`sidebar-ai-submenu ${view === "aiAssistant" || view === "aiAssistantPlan" ? "is-ai-section" : ""}`}>
+            <button className={view === "aiAssistant" ? "active" : ""} onClick={() => handleViewChange("aiAssistant")}>
+              <Sparkles size={15} />
+              {t(language, "navAiAssistant")}
+            </button>
+            <button
+              type="button"
+              className={`ai-submenu-btn ${view === "aiAssistantPlan" ? "active" : ""}`}
+              onClick={() => handleViewChange("aiAssistantPlan")}
+            >
+              <Route size={14} aria-hidden />
+              {t(language, "navAiRoadmap")}
+            </button>
+          </div>
           <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")}>
             <Search size={15} />
             {t(language, "navIsinLive")}
@@ -110,13 +116,13 @@ export function SidebarNav({
           <BookMarked size={16} />
           <span>{t(language, "navJournal")}</span>
         </button>
-        <button className={view === "aiAssistant" ? "active" : ""} onClick={() => handleViewChange("aiAssistant")} aria-label={t(language, "navAiAssistant")}>
+        <button
+          className={view === "aiAssistant" || view === "aiAssistantPlan" ? "active" : ""}
+          onClick={() => handleViewChange("aiAssistant")}
+          aria-label={t(language, "navAiAssistant")}
+        >
           <Sparkles size={16} />
           <span>{t(language, "navAiAssistant")}</span>
-        </button>
-        <button className={view === "aiAssistantPlan" ? "active" : ""} onClick={() => handleViewChange("aiAssistantPlan")} aria-label={t(language, "navAiRoadmap")}>
-          <Route size={16} />
-          <span>{t(language, "navAiRoadmap")}</span>
         </button>
         <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")} aria-label={t(language, "navIsinLive")}>
           <Search size={16} />

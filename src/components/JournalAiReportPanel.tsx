@@ -10,9 +10,11 @@ interface JournalAiReportPanelProps {
   language: AppSettings["language"];
   trades: Trade[];
   journalData: JournalData;
+  /** Ohne Titel/Untertitel im Panel (z. B. wenn die Sektion außen beschriftet ist). */
+  compactTitle?: boolean;
 }
 
-export function JournalAiReportPanel({ language, trades, journalData }: JournalAiReportPanelProps) {
+export function JournalAiReportPanel({ language, trades, journalData, compactTitle = false }: JournalAiReportPanelProps) {
   const [reportRevision, setReportRevision] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
 
@@ -46,15 +48,17 @@ export function JournalAiReportPanel({ language, trades, journalData }: JournalA
     copyState === "ok" ? t(language, "journalAiReportCopied") : copyState === "err" ? t(language, "journalAiReportCopyFailed") : null;
 
   return (
-    <div className="card journal-card journal-ai-report-card">
+    <div className={`card journal-card journal-ai-report-card${compactTitle ? " journal-ai-report-card--compact" : ""}`}>
       <div className="journal-ai-report-head">
-        <div className="journal-ai-report-head-text">
-          <h3 className="journal-ai-report-title">
-            <Sparkles size={16} aria-hidden />
-            {t(language, "journalAiReportCardTitle")}
-          </h3>
-          <p className="journal-ai-report-sub">{t(language, "journalAiReportCardSubtitle")}</p>
-        </div>
+        {!compactTitle ? (
+          <div className="journal-ai-report-head-text">
+            <h3 className="journal-ai-report-title">
+              <Sparkles size={16} aria-hidden />
+              {t(language, "journalAiReportCardTitle")}
+            </h3>
+            <p className="journal-ai-report-sub">{t(language, "journalAiReportCardSubtitle")}</p>
+          </div>
+        ) : null}
         <div className="journal-ai-report-actions">
           <button type="button" className="secondary" onClick={bumpNow}>
             <RefreshCw size={16} aria-hidden />

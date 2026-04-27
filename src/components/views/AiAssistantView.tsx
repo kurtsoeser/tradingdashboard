@@ -1,4 +1,5 @@
-import { Route, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Library, Route, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { AiKnowledgeBaseCard } from "../AiKnowledgeBaseCard";
 import { AiAssistantChatPanel } from "../AiAssistantChatPanel";
 import { PageHeader } from "../PageHeader";
@@ -32,6 +33,8 @@ export function AiAssistantView({
   aiKnowledgeBase,
   onAiKnowledgeBaseChange
 }: AiAssistantViewProps) {
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+
   return (
     <section className="section ai-assistant-page ai-assistant-main-page">
       <PageHeader
@@ -50,8 +53,6 @@ export function AiAssistantView({
         }
       />
 
-      <AiKnowledgeBaseCard language={language} value={aiKnowledgeBase} onChange={onAiKnowledgeBaseChange} />
-
       <AiAssistantChatPanel
         language={language}
         settings={settings}
@@ -62,6 +63,32 @@ export function AiAssistantView({
         onOpenJournal={onOpenJournal}
         onAppendAiToJournal={onAppendAiToJournal}
       />
+
+      <div className="ai-assistant-knowledge-section">
+        <button
+          type="button"
+          id="ai-assistant-knowledge-toggle"
+          className="ai-assistant-knowledge-toggle"
+          aria-expanded={knowledgeOpen}
+          aria-controls="ai-assistant-knowledge-panel"
+          onClick={() => setKnowledgeOpen((o) => !o)}
+        >
+          {knowledgeOpen ? <ChevronDown size={18} aria-hidden /> : <ChevronRight size={18} aria-hidden />}
+          <Library size={16} aria-hidden />
+          <span className="ai-assistant-knowledge-toggle-label">{t(language, "aiKnowledgeCardTitle")}</span>
+        </button>
+        {knowledgeOpen ? (
+          <div
+            id="ai-assistant-knowledge-panel"
+            className="ai-assistant-knowledge-panel-body"
+            role="region"
+            aria-labelledby="ai-assistant-knowledge-toggle"
+          >
+            <p className="ai-assistant-knowledge-toggle-intro">{t(language, "aiKnowledgeCardSubtitle")}</p>
+            <AiKnowledgeBaseCard language={language} value={aiKnowledgeBase} onChange={onAiKnowledgeBaseChange} compactTitle />
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

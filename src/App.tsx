@@ -462,15 +462,43 @@ export default function App() {
       const merged = applyBasiswertMergeToTrades(backup.trades).next;
       setTrades(merged);
       saveTradesToStorage(merged);
-      if (backup.assetMeta && backup.assetMeta.length > 0) {
+      if (backup.replaceAssetMeta && backup.assetMeta !== undefined) {
+        const metaMerged = normalizeAndMergeAssetMetaList(backup.assetMeta).next;
+        setAssetMeta(metaMerged);
+        saveAssetMetaToStorage(metaMerged);
+      } else if (backup.assetMeta && backup.assetMeta.length > 0) {
         const metaMerged = normalizeAndMergeAssetMetaList(backup.assetMeta).next;
         setAssetMeta(metaMerged);
         saveAssetMetaToStorage(metaMerged);
       }
+      if (backup.appSettings) {
+        setAppSettings({ ...defaultAppSettings, ...backup.appSettings });
+      }
+      if (backup.theme === "dark" || backup.theme === "light") {
+        setTheme(backup.theme);
+      }
+      if (backup.journal) {
+        saveJournalToStorage(backup.journal);
+        setJournalData(backup.journal);
+      }
+      if (backup.aiKnowledgeBase !== undefined) {
+        setAiKnowledgeBase(backup.aiKnowledgeBase);
+        saveAiKnowledgeToStorage(backup.aiKnowledgeBase);
+      }
+      const moreParts: string[] = [];
+      if (backup.appSettings) moreParts.push(t(lang, "importJsonPartSettings"));
+      if (backup.theme) moreParts.push(t(lang, "importJsonPartTheme"));
+      if (backup.journal) moreParts.push(t(lang, "importJsonPartJournal"));
+      if (backup.aiKnowledgeBase !== undefined) moreParts.push(t(lang, "importJsonPartAiKb"));
+      const more =
+        moreParts.length > 0
+          ? t(lang, "importJsonOkMore", { list: moreParts.join(", ") })
+          : "";
       window.alert(
         t(lang, "importJsonOk", {
           trades: merged.length,
-          assets: backup.assetMeta?.length ? t(lang, "importJsonOkAssets") : ""
+          assets: backup.assetMeta?.length ? t(lang, "importJsonOkAssets") : "",
+          more
         })
       );
       return;
@@ -909,7 +937,14 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
   const exportTradesJsonBackup = () => {
-    const json = buildAppBackupJson(trades, assetMeta);
+    const json = buildAppBackupJson({
+      trades,
+      assetMeta,
+      appSettings,
+      theme,
+      journal: journalData,
+      aiKnowledgeBase
+    });
     const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1077,7 +1112,6 @@ export default function App() {
             onDownloadImportTemplateCsv={downloadImportTemplateCsv}
             onDownloadImportTemplateExcel={downloadImportTemplateExcel}
             onExportTradesCsvForExcel={exportTradesCsvForExcel}
-            onExportTradesJsonBackup={exportTradesJsonBackup}
             onGoToNewTrade={startNewTrade}
             onEditTrade={editTrade}
             onDeleteTrade={deleteTrade}
@@ -1196,6 +1230,8 @@ export default function App() {
             onApplyTheme={setTheme}
             currentTheme={theme}
             t={(key) => t(appSettings.language, key)}
+            onImportBackupFile={importTradesFile}
+            onExportJsonBackup={exportTradesJsonBackup}
             onApplyKnownTickerSuggestions={applyKnownTickerSuggestions}
             knownTickerSuggestionCount={countKnownTickerKeys()}
             onMergeDuplicateBasiswerte={runMergeDuplicateBasiswerte}

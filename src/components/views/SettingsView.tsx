@@ -1,4 +1,4 @@
-import { Bell, Building2, CalendarClock, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Sparkles, Wallet } from "lucide-react";
+import { Bell, Building2, CalendarClock, FileJson, GitMerge, Globe2, Hash, Languages, Settings2, ShieldCheck, Sparkles, Upload, Wallet } from "lucide-react";
 import { PageHeader } from "../PageHeader";
 import type { I18nKey } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
@@ -27,6 +27,9 @@ interface SettingsViewProps {
   }>;
   onApplyReconcileSuggestion?: (rowId: string) => void;
   onApplyAllReconcileSuggestions?: () => void;
+  /** JSON-App-Backup (vollständig): Import wie unter Trades. */
+  onImportBackupFile: (file: File) => Promise<void>;
+  onExportJsonBackup: () => void;
 }
 
 export function SettingsView({
@@ -41,7 +44,9 @@ export function SettingsView({
   basiswertMergePreview,
   reconcileRows,
   onApplyReconcileSuggestion,
-  onApplyAllReconcileSuggestions
+  onApplyAllReconcileSuggestions,
+  onImportBackupFile,
+  onExportJsonBackup
 }: SettingsViewProps) {
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     onSettingsChange({ ...settings, [key]: value });
@@ -57,9 +62,99 @@ export function SettingsView({
           </>
         }
         subtitle="Passe App-Verhalten, Anzeige und Marktpräferenzen an"
+        actions={
+          <>
+            <input
+              id="settings-header-backup-import"
+              type="file"
+              accept=".json,application/json"
+              className="hidden-file-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onImportBackupFile(file);
+                e.target.value = "";
+              }}
+            />
+            <label
+              htmlFor="settings-header-backup-import"
+              className="secondary file-pick-btn"
+              title={t("importJsonHint")}
+            >
+              <Upload size={14} />
+              {t("import")}
+            </label>
+            <button type="button" className="primary" onClick={onExportJsonBackup} title={t("jsonBackupHint")}>
+              <FileJson size={14} />
+              {t("export")}
+            </button>
+          </>
+        }
       />
 
       <div className="settings-grid">
+        <div className="card settings-card">
+          <h3>
+            <CalendarClock size={14} />
+            Darstellung
+          </h3>
+          <div className="settings-form-grid">
+            <label>
+              Datumsformat
+              <select value={settings.dateFormat} onChange={(e) => update("dateFormat", e.target.value as AppSettings["dateFormat"])}>
+                <option value="dd.MM.yyyy">dd.MM.yyyy</option>
+                <option value="yyyy-MM-dd">yyyy-MM-dd</option>
+              </select>
+            </label>
+            <label>
+              Zahlenformat
+              <select value={settings.numberFormat} onChange={(e) => update("numberFormat", e.target.value as AppSettings["numberFormat"])}>
+                <option value="de-DE">de-DE (1.234,56)</option>
+                <option value="en-US">en-US (1,234.56)</option>
+              </select>
+            </label>
+            <label>
+              Startansicht
+              <select value={settings.defaultStartView} onChange={(e) => update("defaultStartView", e.target.value as AppSettings["defaultStartView"])}>
+                <option value="dashboard">Dashboard</option>
+                <option value="trades">Trades</option>
+                <option value="assets">Assets</option>
+                <option value="analytics">Auswertungen</option>
+                <option value="journal">Journal</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="card settings-card">
+          <h3>
+            <ShieldCheck size={14} />
+            Verhalten
+          </h3>
+          <div className="settings-form-grid">
+            <label className="settings-toggle">
+              <span>
+                <Globe2 size={14} />
+                Kompakter Modus
+              </span>
+              <input type="checkbox" checked={settings.compactMode} onChange={(e) => update("compactMode", e.target.checked)} />
+            </label>
+            <label className="settings-toggle">
+              <span>
+                <Languages size={14} />
+                Löschen bestätigen
+              </span>
+              <input type="checkbox" checked={settings.confirmBeforeDelete} onChange={(e) => update("confirmBeforeDelete", e.target.checked)} />
+            </label>
+            <label>
+              Theme
+              <select onChange={(e) => onApplyTheme(e.target.value as "dark" | "light")} value={currentTheme}>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
         <div className="card settings-card">
           <h3>
             <Wallet size={14} />
@@ -194,7 +289,7 @@ export function SettingsView({
         )}
 
         {reconcileRows && onApplyReconcileSuggestion && (
-          <div className="card settings-card">
+          <div className="card settings-card settings-card-span">
             <h3>
               <Hash size={14} />
               ISIN/WKN-Abgleich
@@ -267,39 +362,6 @@ export function SettingsView({
           </div>
         )}
 
-        <div className="card settings-card">
-          <h3>
-            <CalendarClock size={14} />
-            Darstellung
-          </h3>
-          <div className="settings-form-grid">
-            <label>
-              Datumsformat
-              <select value={settings.dateFormat} onChange={(e) => update("dateFormat", e.target.value as AppSettings["dateFormat"])}>
-                <option value="dd.MM.yyyy">dd.MM.yyyy</option>
-                <option value="yyyy-MM-dd">yyyy-MM-dd</option>
-              </select>
-            </label>
-            <label>
-              Zahlenformat
-              <select value={settings.numberFormat} onChange={(e) => update("numberFormat", e.target.value as AppSettings["numberFormat"])}>
-                <option value="de-DE">de-DE (1.234,56)</option>
-                <option value="en-US">en-US (1,234.56)</option>
-              </select>
-            </label>
-            <label>
-              Startansicht
-              <select value={settings.defaultStartView} onChange={(e) => update("defaultStartView", e.target.value as AppSettings["defaultStartView"])}>
-                <option value="dashboard">Dashboard</option>
-                <option value="trades">Trades</option>
-                <option value="assets">Assets</option>
-                <option value="analytics">Auswertungen</option>
-                <option value="journal">Journal</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
         <div className="card settings-card settings-card-span">
           <h3>
             <Sparkles size={14} />
@@ -354,36 +416,6 @@ export function SettingsView({
             <summary>{t("settingsAiProxyHelpTitle")}</summary>
             <p className="settings-ai-proxy-body">{t("settingsAiProxyHelpBody")}</p>
           </details>
-        </div>
-
-        <div className="card settings-card">
-          <h3>
-            <ShieldCheck size={14} />
-            Verhalten
-          </h3>
-          <div className="settings-form-grid">
-            <label className="settings-toggle">
-              <span>
-                <Globe2 size={14} />
-                Kompakter Modus
-              </span>
-              <input type="checkbox" checked={settings.compactMode} onChange={(e) => update("compactMode", e.target.checked)} />
-            </label>
-            <label className="settings-toggle">
-              <span>
-                <Languages size={14} />
-                Löschen bestätigen
-              </span>
-              <input type="checkbox" checked={settings.confirmBeforeDelete} onChange={(e) => update("confirmBeforeDelete", e.target.checked)} />
-            </label>
-            <label>
-              Theme
-              <select onChange={(e) => onApplyTheme(e.target.value as "dark" | "light")} value={currentTheme}>
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
-            </label>
-          </div>
         </div>
       </div>
 

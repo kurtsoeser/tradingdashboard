@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileJson, FileSpreadsheet, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileSpreadsheet, HandCoins, Layers, Pencil, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
@@ -35,7 +35,6 @@ interface TradesViewProps {
   onDownloadImportTemplateCsv: () => void;
   onDownloadImportTemplateExcel: () => void;
   onExportTradesCsvForExcel: () => void;
-  onExportTradesJsonBackup: () => void;
   onGoToNewTrade: () => void;
   onEditTrade: (trade: Trade) => void;
   onDeleteTrade: (id: string) => void;
@@ -130,13 +129,6 @@ export function TradesView(props: TradesViewProps) {
                     {t(props.language, "csvExportExcel")}
                   </span>
                   <small>{t(props.language, "csvExportExcelHint")}</small>
-                </button>
-                <button className="actions-dropdown-item" onClick={props.onExportTradesJsonBackup}>
-                  <span className="actions-dropdown-item-content">
-                    <FileJson size={14} />
-                    {t(props.language, "jsonBackup")}
-                  </span>
-                  <small>{t(props.language, "jsonBackupHint")}</small>
                 </button>
               </div>
             </details>

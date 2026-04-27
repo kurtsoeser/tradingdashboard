@@ -10,17 +10,24 @@ function emptyJournal(): JournalData {
   return { byDay: {}, byWeek: {}, byMonth: {} };
 }
 
+/** Journal aus Backup/JSON normalisieren (fehlende Felder → leer). */
+export function normalizeJournalData(parsed: unknown): JournalData {
+  if (!parsed || typeof parsed !== "object") return emptyJournal();
+  const o = parsed as Record<string, unknown>;
+  const pick = (v: unknown): Record<string, string> =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : {};
+  return {
+    byDay: pick(o.byDay),
+    byWeek: pick(o.byWeek),
+    byMonth: pick(o.byMonth)
+  };
+}
+
 export function loadJournalFromStorage(): JournalData {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return emptyJournal();
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return emptyJournal();
-    const o = parsed as Record<string, unknown>;
-    const byDay = o.byDay && typeof o.byDay === "object" && !Array.isArray(o.byDay) ? (o.byDay as Record<string, string>) : {};
-    const byWeek = o.byWeek && typeof o.byWeek === "object" && !Array.isArray(o.byWeek) ? (o.byWeek as Record<string, string>) : {};
-    const byMonth = o.byMonth && typeof o.byMonth === "object" && !Array.isArray(o.byMonth) ? (o.byMonth as Record<string, string>) : {};
-    return { byDay, byWeek, byMonth };
+    return normalizeJournalData(JSON.parse(raw) as unknown);
   } catch {
     return emptyJournal();
   }

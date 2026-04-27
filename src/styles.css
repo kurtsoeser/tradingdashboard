@@ -79,6 +79,55 @@ body {
   background: #131316;
 }
 
+.sidebar-ai-submenu {
+  margin-bottom: 8px;
+}
+
+.sidebar-ai-submenu > button:first-of-type {
+  margin-bottom: 2px;
+}
+
+.menu .ai-submenu-btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 12px 8px 28px;
+  cursor: pointer;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
+.menu .ai-submenu-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.menu .ai-submenu-btn.active {
+  color: var(--text);
+  border-color: var(--border);
+  background: #131316;
+  opacity: 1;
+}
+
+.sidebar-ai-submenu.is-ai-section {
+  border-radius: 10px;
+  padding: 2px;
+  margin-left: -2px;
+  margin-right: -2px;
+}
+
+[data-theme="light"] .menu .ai-submenu-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .sidebar-theme-switcher {
   margin-top: auto;
   padding-top: 12px;
@@ -1738,6 +1787,10 @@ button.dashboard-link-card:hover {
   background: #f6f6f9;
 }
 
+[data-theme="light"] .menu .ai-submenu-btn.active {
+  background: #f6f6f9;
+}
+
 [data-theme="light"] .card {
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
 }
@@ -2278,7 +2331,7 @@ td.action-col {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -2570,7 +2623,7 @@ td.action-col {
     bottom: 0;
     z-index: 46;
     display: grid;
-    grid-template-columns: repeat(9, minmax(0, 1fr));
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 0;
     border-top: 1px solid var(--border);
     background: #111114;
@@ -2670,8 +2723,60 @@ td.action-col {
   margin-top: 4px;
 }
 
+.journal-ai-report-section,
+.ai-assistant-knowledge-section {
+  margin-top: 20px;
+}
+
+.journal-ai-report-toggle,
+.ai-assistant-knowledge-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel, #131316);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.journal-ai-report-toggle:hover,
+.ai-assistant-knowledge-toggle:hover {
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.18));
+  background: var(--panel-2, #18181c);
+}
+
+.journal-ai-report-toggle-label,
+.ai-assistant-knowledge-toggle-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.journal-ai-report-panel-body,
+.ai-assistant-knowledge-panel-body {
+  margin-top: 12px;
+}
+
+.journal-ai-report-toggle-intro,
+.ai-assistant-knowledge-toggle-intro {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+
 .journal-ai-report-card {
   margin-bottom: 14px;
+}
+
+.journal-ai-report-card--compact .journal-ai-report-head {
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .journal-ai-report-head {
@@ -2755,6 +2860,18 @@ td.action-col {
 [data-theme="light"] .journal-ai-report-textarea {
   background: rgba(255, 255, 255, 0.65);
   border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .journal-ai-report-toggle,
+[data-theme="light"] .ai-assistant-knowledge-toggle {
+  background: #f6f6f9;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .journal-ai-report-toggle:hover,
+[data-theme="light"] .ai-assistant-knowledge-toggle:hover {
+  background: #ececf0;
+  border-color: rgba(0, 0, 0, 0.14);
 }
 
 .ai-assistant-page .page-header-actions {
@@ -2867,6 +2984,10 @@ td.action-col {
 
 .ai-knowledge-card {
   margin-bottom: 14px;
+}
+
+.ai-knowledge-card--compact {
+  margin-bottom: 0;
 }
 
 .ai-knowledge-head h3 {

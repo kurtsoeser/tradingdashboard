@@ -1,4 +1,4 @@
-import { BookMarked, CalendarDays, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
+import { BookMarked, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AppSettings } from "../../app/settings";
 import { t } from "../../app/i18n";
@@ -50,6 +50,7 @@ export function JournalView({
   const [draftWeek, setDraftWeek] = useState("");
   const [draftDay, setDraftDay] = useState("");
   const [draftMonth, setDraftMonth] = useState("");
+  const [aiReportOpen, setAiReportOpen] = useState(false);
 
   useEffect(() => {
     setDraftWeek(journalData.byWeek[weekKey] ?? "");
@@ -150,8 +151,6 @@ export function JournalView({
         }
         subtitle={t(language, "journalSubtitle")}
       />
-
-      <JournalAiReportPanel language={language} trades={trades} journalData={journalData} />
 
       <div className="analytics-tabbar journal-tabbar">
         <button type="button" className={mode === "month" ? "secondary active" : "secondary"} onClick={() => setMode("month")}>
@@ -317,6 +316,27 @@ export function JournalView({
           </div>
         </div>
       )}
+
+      <div className="journal-ai-report-section">
+        <button
+          type="button"
+          id="journal-ai-report-toggle"
+          className="journal-ai-report-toggle"
+          aria-expanded={aiReportOpen}
+          aria-controls="journal-ai-report-panel"
+          onClick={() => setAiReportOpen((o) => !o)}
+        >
+          {aiReportOpen ? <ChevronDown size={18} aria-hidden /> : <ChevronRight size={18} aria-hidden />}
+          <Sparkles size={16} aria-hidden />
+          <span className="journal-ai-report-toggle-label">{t(language, "journalAiReportCardTitle")}</span>
+        </button>
+        {aiReportOpen ? (
+          <div id="journal-ai-report-panel" className="journal-ai-report-panel-body" role="region" aria-labelledby="journal-ai-report-toggle">
+            <p className="journal-ai-report-toggle-intro">{t(language, "journalAiReportCardSubtitle")}</p>
+            <JournalAiReportPanel language={language} trades={trades} journalData={journalData} compactTitle />
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
