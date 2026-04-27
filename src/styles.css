@@ -1887,6 +1887,63 @@ button.dashboard-link-card:hover {
   align-items: center;
 }
 
+.live-suggest-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--panel-2);
+}
+
+.live-suggest-head {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.live-suggest-list {
+  display: grid;
+  gap: 6px;
+}
+
+.live-suggest-item {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  padding: 7px 9px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+}
+
+.live-suggest-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.live-suggest-item:hover {
+  border-color: #56565f;
+  background: rgba(86, 86, 95, 0.2);
+}
+
+.live-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-filter-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.live-filter-row .secondary.active {
+  border-color: #676771;
+  background: rgba(103, 103, 113, 0.22);
+}
+
 .dashboard-section-head {
   display: flex;
   justify-content: space-between;
