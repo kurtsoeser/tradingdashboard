@@ -1,22 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, FileText, HandCoins, Landmark, Tags, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, ExternalLink, FileText, HandCoins, Landmark, Save, Search, Tags, TrendingUp } from "lucide-react";
 import { formatMonthLabel, getNowLocalDateTimeValue, parseStoredDateTime } from "../../app/date";
 import { t } from "../../app/i18n";
 import type { AssetDisplayRow, AssetMeta, NewTradeForm, TradeFormType } from "../../app/types";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import { canonicalizeBasiswert, sameBasiswertBucket } from "../../lib/basiswertCanonical";
-import { lookupKnownTickerSuggestion } from "../../data/knownAssetTickers";
+import { lookupKnownTickerSuggestionDual } from "../../data/knownAssetTickers";
 import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
-import { searchByIsinOpenFigi } from "../../lib/openFigiSearch";
+import { searchByIsinOpenFigi, tradingViewSymbolFromOpenFigiHit } from "../../lib/openFigiSearch";
 import { resolvePlainTickerForTradingView } from "../../data/tickerTradingViewAliases";
 import type { AppSettings } from "../../app/settings";
+import { buildFinanceSearchUrl } from "../../lib/financeLinks";
 import type { Trade } from "../../types/trade";
 import { PageHeader } from "../PageHeader";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
 
+function isDerivativeTradeTyp(typ: string): boolean {
+  return typ === "Long" || typ === "Short" || typ === "Derivat";
+}
+
+function financeProviderLabel(language: AppSettings["language"], service: AppSettings["financeService"]): string {
+  switch (service) {
+    case "yahoo":
+      return t(language, "financeProviderYahoo");
+    case "tradingview":
+      return t(language, "financeProviderTradingview");
+    case "investing":
+      return t(language, "financeProviderInvesting");
+    case "google":
+    default:
+      return t(language, "financeProviderGoogle");
+  }
+}
+
 interface NewTradeViewProps {
   editingTradeId: string | null;
   language: AppSettings["language"];
+  financeService: AppSettings["financeService"];
   trades: Trade[];
   assetMeta: AssetMeta[];
   chartTheme: "dark" | "light";
@@ -26,15 +46,16 @@ interface NewTradeViewProps {
   gewinn: number;
   rendite: number;
   haltedauer: number;
+  canSaveTrade: boolean;
   onSaveNewTrade: () => void;
   onSetViewTrades: () => void;
-  onResetForm: () => void;
-  onCancelEdit: () => void;
+  onCancelNewTradeView: () => void;
 }
 
 export function NewTradeView({
   editingTradeId,
   language,
+  financeService,
   trades,
   assetMeta,
   chartTheme,
@@ -44,10 +65,10 @@ export function NewTradeView({
   gewinn,
   rendite,
   haltedauer,
+  canSaveTrade,
   onSaveNewTrade,
   onSetViewTrades,
-  onResetForm,
-  onCancelEdit
+  onCancelNewTradeView
 }: NewTradeViewProps) {
   const formatDateTimeDisplay = (value: string) => {
     if (!value) return "";
@@ -89,6 +110,20 @@ export function NewTradeView({
 
   const normalizedIsin = form.isin.trim().toUpperCase();
   const isValidIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalizedIsin);
+  const derivativeLiveQueriesChart = isDerivativeTradeTyp(form.typ);
+  const derivativeFinanceQuery = useMemo(() => {
+    if (!derivativeLiveQueriesChart) return "";
+    if (isValidIsin) return normalizedIsin;
+    const w = form.wkn.trim().toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(w)) return w;
+    const b = form.basiswert.trim();
+    if (b) return b;
+    return form.name.trim();
+  }, [derivativeLiveQueriesChart, isValidIsin, normalizedIsin, form.wkn, form.basiswert, form.name]);
+  const showLiveChartCard =
+    !!form.isin.trim() ||
+    !!form.basiswert.trim() ||
+    (derivativeLiveQueriesChart && (!!form.wkn.trim() || !!form.name.trim()));
 
   useEffect(() => {
     setKaufzeitpunktDisplay(formatDateTimeDisplay(form.kaufzeitpunkt));
@@ -206,7 +241,7 @@ export function NewTradeView({
     if (!raw) return null;
     const canon = canonicalizeBasiswert(raw);
     const meta = assetMeta.find((m) => sameBasiswertBucket(m.name, canon));
-    const tickerKnown = lookupKnownTickerSuggestion(canon)?.ticker?.trim();
+    const tickerKnown = lookupKnownTickerSuggestionDual(canon, raw)?.ticker?.trim();
     const ticker = (meta?.ticker?.trim() || tickerKnown) ?? "";
     if (!ticker) return null;
     const row: AssetDisplayRow = {
@@ -222,6 +257,13 @@ export function NewTradeView({
     return assetToTradingViewSymbol(row);
   }, [form.basiswert, assetMeta]);
 
+  /** Bei Long/Short/Derivat nur Basiswert/Metadaten (ISIN = Produkt, nicht Underlying). Sonst zusätzlich ISIN-Fallback. */
+  const basisChartTvSymbol = useMemo(() => {
+    if (derivativeLiveQueriesChart) return basiswertLiveTvSymbol ?? null;
+    return basiswertLiveTvSymbol ?? isinLiveSymbol ?? null;
+  }, [derivativeLiveQueriesChart, basiswertLiveTvSymbol, isinLiveSymbol]);
+  const basisChartUsesIsinFallback = !derivativeLiveQueriesChart && !basiswertLiveTvSymbol && !!isinLiveSymbol;
+
   useEffect(() => {
     let aborted = false;
     const controller = new AbortController();
@@ -236,7 +278,7 @@ export function NewTradeView({
       .then((hits) => {
         if (aborted) return;
         const first = hits[0];
-        const symbol = first?.ticker ? resolvePlainTickerForTradingView(first.ticker) : null;
+        const symbol = first ? tradingViewSymbolFromOpenFigiHit(first) : null;
         setIsinLiveSymbol(symbol);
         setIsinLookupState(hits.length > 0 ? "ok" : "empty");
       })
@@ -286,6 +328,9 @@ export function NewTradeView({
     });
   }, [kaufPreisEffektiv]);
 
+  /** Live-Chart unter Kauf/Verkauf/Ergebnis (2/3 Rasterbreite, etwas höher). */
+  const liveChartEmbedHeight = 360;
+
   const handleStueckChange = (nextStueck: string) => {
     setForm((prev) => {
       const qty = Number.parseFloat(nextStueck) || 0;
@@ -308,10 +353,16 @@ export function NewTradeView({
         title={editingTradeId ? t(language, "editTradeTitle") : t(language, "newTradeTitle")}
         subtitle={editingTradeId ? t(language, "editTradeSubtitle") : t(language, "newTradeSubtitle")}
         actions={
-          <button className="secondary" onClick={onSetViewTrades}>
-            <CandlestickChart size={14} />
-            {t(language, "toTrades")}
-          </button>
+          <>
+            <button className="secondary" type="button" onClick={onSetViewTrades}>
+              <CandlestickChart size={14} />
+              {t(language, "toTrades")}
+            </button>
+            <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
+              <Save size={14} />
+              {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
+            </button>
+          </>
         }
       />
 
@@ -389,40 +440,6 @@ export function NewTradeView({
             />
           </label>
         </div>
-
-        {(form.isin.trim() || form.basiswert.trim()) && (
-          <div className="card form-card card-span-3 new-trade-basis-chart-card">
-            <div className="card-title-row">
-              <h3>
-                <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
-                {t(language, "liveChart")}
-              </h3>
-            </div>
-            <div className="new-trade-live-charts-grid">
-              <div className="new-trade-live-chart-col">
-                <h4 className="live-chart-title">{t(language, "liveChartIsin")}</h4>
-                {isValidIsin && isinLookupState === "loading" && <p className="live-chart-hint live-chart-hint-compact">{t(language, "editAssetSearching")}</p>}
-                {isinLookupState === "error" && <p className="live-chart-empty">{t(language, "isinLookupError")}</p>}
-                {!isValidIsin && normalizedIsin.length > 0 && <p className="live-chart-empty">{t(language, "isinInvalidHint")}</p>}
-                {isValidIsin && isinLookupState === "empty" && <p className="live-chart-empty">{t(language, "isinNoResults")}</p>}
-                {isValidIsin && isinLiveSymbol && <TradingViewLiveChart symbol={isinLiveSymbol} theme={chartTheme} height={320} />}
-              </div>
-              <div className="new-trade-live-chart-col">
-                <h4 className="live-chart-title">{t(language, "liveChartBasis")}</h4>
-                {basiswertLiveTvSymbol ? (
-                  <>
-                    <p className="live-chart-hint live-chart-hint-compact">
-                      {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basiswertLiveTvSymbol}</code>
-                    </p>
-                    <TradingViewLiveChart symbol={basiswertLiveTvSymbol} theme={chartTheme} height={320} />
-                  </>
-                ) : (
-                  <p className="live-chart-empty">{t(language, "enterBasiswertHint")}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
@@ -666,6 +683,103 @@ export function NewTradeView({
           </div>
         </div>
 
+        {showLiveChartCard && (
+          <div className="card form-card card-span-2 new-trade-live-chart-wide">
+            <div className="card-title-row">
+              <h3>
+                <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
+                {derivativeLiveQueriesChart ? t(language, "liveChartUnderlyingTitle") : t(language, "liveChart")}
+              </h3>
+            </div>
+            {derivativeLiveQueriesChart ? (
+              <div className="new-trade-derivative-underlying-wrap new-trade-derivative-underlying-chart-only">
+                <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveChartUnderlyingDerivativeHint")}</p>
+                {basisChartTvSymbol ? (
+                  <>
+                    <p className="live-chart-hint live-chart-hint-compact">
+                      {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basisChartTvSymbol}</code>
+                    </p>
+                    <TradingViewLiveChart symbol={basisChartTvSymbol} theme={chartTheme} height={liveChartEmbedHeight} />
+                  </>
+                ) : (
+                  <p className="live-chart-empty">{t(language, "enterBasiswertHint")}</p>
+                )}
+              </div>
+            ) : (
+              <div className="new-trade-live-charts-grid new-trade-live-charts-grid--narrow">
+                <div className="new-trade-live-chart-col">
+                  <h4 className="live-chart-title">{t(language, "liveChartIsin")}</h4>
+                  {isValidIsin && isinLookupState === "loading" && <p className="live-chart-hint live-chart-hint-compact">{t(language, "editAssetSearching")}</p>}
+                  {isinLookupState === "error" && <p className="live-chart-empty">{t(language, "isinLookupError")}</p>}
+                  {!isValidIsin && normalizedIsin.length > 0 && <p className="live-chart-empty">{t(language, "isinInvalidHint")}</p>}
+                  {isValidIsin && isinLookupState === "empty" && <p className="live-chart-empty">{t(language, "isinNoResults")}</p>}
+                  {isValidIsin && isinLiveSymbol && (
+                    <TradingViewLiveChart symbol={isinLiveSymbol} theme={chartTheme} height={liveChartEmbedHeight} />
+                  )}
+                </div>
+                <div className="new-trade-live-chart-col">
+                  <h4 className="live-chart-title">{t(language, "liveChartBasis")}</h4>
+                  {!basiswertLiveTvSymbol && isValidIsin && isinLookupState === "loading" && (
+                    <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveChartBasisWaitingIsin")}</p>
+                  )}
+                  {basisChartTvSymbol ? (
+                    <>
+                      <p className="live-chart-hint live-chart-hint-compact">
+                        {basisChartUsesIsinFallback ? (
+                          t(language, "liveChartBasisFromIsin", { isin: normalizedIsin, symbol: basisChartTvSymbol })
+                        ) : (
+                          <>
+                            {t(language, "liveChartPreview")} <code>{canonicalizeBasiswert(form.basiswert.trim())}</code> — <code>{basisChartTvSymbol}</code>
+                          </>
+                        )}
+                      </p>
+                      <TradingViewLiveChart symbol={basisChartTvSymbol} theme={chartTheme} height={liveChartEmbedHeight} />
+                    </>
+                  ) : (
+                    !(isValidIsin && isinLookupState === "loading") && (
+                      <p className="live-chart-empty">{t(language, "enterBasiswertHint")}</p>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {derivativeLiveQueriesChart && (
+          <div
+            className={`card form-card new-trade-derivative-kurs-suche-row ${showLiveChartCard ? "card-span-1" : "card-span-3"}`}
+          >
+            <div className="card-title-row">
+              <h3>
+                <Search size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
+                {t(language, "liveChartDerivativeTitle")}
+              </h3>
+            </div>
+            <div className="new-trade-derivative-live-block">
+              <p className="live-chart-hint">{t(language, "newTradeDerivativeLiveHint")}</p>
+              {derivativeFinanceQuery ? (
+                <>
+                  <p className="live-chart-hint live-chart-hint-compact new-trade-derivative-live-query">
+                    {t(language, "newTradeDerivativeLiveQuery", { q: derivativeFinanceQuery })}
+                  </p>
+                  <a
+                    className="secondary new-trade-derivative-finance-link"
+                    href={buildFinanceSearchUrl(derivativeFinanceQuery, financeService)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink size={14} aria-hidden />
+                    {t(language, "financeOpen", { svc: financeProviderLabel(language, financeService) })}
+                  </a>
+                </>
+              ) : (
+                <p className="live-chart-empty">{t(language, "newTradeDerivativeLiveNeedQuery")}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="card form-card asset-history-card card-span-1">
           <div className="asset-history-title-row">
             <h3>
@@ -751,16 +865,10 @@ export function NewTradeView({
       </div>
 
       <div className="new-trade-actions">
-        <button className="primary" onClick={onSaveNewTrade}>
+        <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
           {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
         </button>
-        <button
-          className="secondary"
-          onClick={() => {
-            onResetForm();
-            onCancelEdit();
-          }}
-        >
+        <button className="secondary" type="button" onClick={onCancelNewTradeView}>
           {t(language, "cancel")}
         </button>
       </div>

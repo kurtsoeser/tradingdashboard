@@ -294,12 +294,17 @@ button.primary {
   resize: vertical;
 }
 
-.new-trade-basis-chart-card {
-  margin-top: 0;
+.new-trade-live-chart-wide {
+  min-width: 0;
 }
 
-.new-trade-basis-chart-card .live-chart-hint-compact {
-  margin-top: 0;
+.new-trade-live-chart-wide .live-chart-hint-compact code {
+  word-break: break-all;
+}
+
+.new-trade-live-charts-grid--narrow {
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 
 .new-trade-live-charts-grid {
@@ -3758,6 +3763,38 @@ td.action-col {
 .journal-week-summary .positive,
 .journal-week-summary .negative {
   font-weight: 600;
+}
+
+.new-trade-derivative-live-block {
+  margin-top: 2px;
+}
+
+.new-trade-derivative-underlying-wrap {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.new-trade-derivative-underlying-wrap.new-trade-derivative-underlying-chart-only {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.new-trade-derivative-kurs-suche-row {
+  min-width: 0;
+}
+
+.new-trade-derivative-kurs-suche-row .card-title-row {
+  margin-bottom: 4px;
+}
+
+.new-trade-derivative-live-query {
+  margin-bottom: 10px;
+}
+
+a.new-trade-derivative-finance-link {
+  text-decoration: none;
 }
 
 /* Live-Chart (TradingView iframe) */

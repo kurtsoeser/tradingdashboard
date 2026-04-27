@@ -3,6 +3,8 @@
  * @see https://www.openfigi.com/api
  */
 
+import { resolvePlainTickerForTradingView } from "../data/tickerTradingViewAliases";
+
 export interface OpenFigiSearchHit {
   figi: string;
   name: string;
@@ -65,6 +67,20 @@ function isFilteredOut(row: OpenFigiSearchHit): boolean {
   return false;
 }
 
+/**
+ * US-ISINs: OpenFIGI liefert oft Xetra-/SW-Ticker zuerst (score +80) statt US-Listing (+40) —
+ * TradingView braucht für ETFs/ADR meist NASDAQ/NYSE. Bonus verschiebt die Reihenfolge für Charts.
+ */
+function chartTickerSortBonusForIsin(row: OpenFigiSearchHit | OpenFigiIsinHit, isin: string): number {
+  const ex = row.exchCode ?? "";
+  const prefix = isin.slice(0, 2).toUpperCase();
+  if (prefix === "US") {
+    if (US_LISTING_EXCH.has(ex)) return 120;
+    if (GERMAN_DOMESTIC_EXCH.has(ex)) return -45;
+  }
+  return 0;
+}
+
 function score(row: OpenFigiSearchHit): number {
   let s = 0;
   const ex = row.exchCode ?? "";
@@ -95,6 +111,19 @@ export function suggestTickerXetraFromHit(row: OpenFigiSearchHit): string | null
   const ex = row.exchCode ?? "";
   if (!GERMAN_DOMESTIC_EXCH.has(ex)) return null;
   return row.ticker.trim();
+}
+
+/** TradingView-Symbol aus einem OpenFIGI-Treffer (US-Börse → NASDAQ:/NYSE:, sonst XETR:). */
+export function tradingViewSymbolFromOpenFigiHit(row: OpenFigiIsinHit | OpenFigiSearchHit): string | null {
+  const rawTicker = row.ticker?.trim();
+  if (!rawTicker) return null;
+  const ex = row.exchCode ?? "";
+  if (US_LISTING_EXCH.has(ex)) {
+    return suggestTickerUsFromHit(row as OpenFigiSearchHit);
+  }
+  const xetraT = suggestTickerXetraFromHit(row as OpenFigiSearchHit);
+  if (xetraT) return resolvePlainTickerForTradingView(xetraT);
+  return resolvePlainTickerForTradingView(rawTicker);
 }
 
 function openFigiSearchUrl(): string {
@@ -145,7 +174,15 @@ export async function searchByIsinOpenFigi(isin: string, signal?: AbortSignal): 
   const json = (await res.json()) as Array<{ data?: OpenFigiIsinHit[] }>;
   const rows = json?.[0]?.data ?? [];
   const filtered = rows.filter((r) => r?.ticker && r?.name && !isFilteredOut(r));
-  return [...filtered].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name)).slice(0, 20);
+  return [...filtered]
+    .sort(
+      (a, b) =>
+        score(b as OpenFigiSearchHit) +
+        chartTickerSortBonusForIsin(b, normalized) -
+        (score(a as OpenFigiSearchHit) + chartTickerSortBonusForIsin(a, normalized)) ||
+        a.name.localeCompare(b.name)
+    )
+    .slice(0, 20);
 }
 
 export async function searchByWknOpenFigi(wkn: string, signal?: AbortSignal): Promise<OpenFigiIsinHit[]> {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import type { Trade } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
@@ -62,6 +62,8 @@ export default function App() {
     })
   );
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
+  /** Stabile Trade-ID für Autospeichern bei neuem Trade (ohne Bearbeitungsmodus). */
+  const newTradeDraftIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
   const [typFilter, setTypFilter] = useState<"Alle" | string>("Alle");
@@ -828,10 +830,20 @@ export default function App() {
   const rendite = kaufPreis > 0 ? (gewinn / kaufPreis) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
 
-  const saveNewTrade = () => {
-    if (!form.name.trim() || !form.basiswert.trim() || !form.kaufzeitpunkt || stueck <= 0 || kaufStueckpreis <= 0 || kaufPreis <= 0) return;
+  const canSaveTrade =
+    !!form.name.trim() &&
+    !!form.basiswert.trim() &&
+    !!form.kaufzeitpunkt &&
+    stueck > 0 &&
+    kaufStueckpreis > 0 &&
+    kaufPreis > 0;
+
+  const persistTradeFromForm = (finalize: boolean): boolean => {
+    if (!canSaveTrade) return false;
+    const effectiveId = editingTradeId ?? (newTradeDraftIdRef.current ?? `trade-${Date.now()}`);
+    if (!editingTradeId) newTradeDraftIdRef.current = effectiveId;
     const next: Trade = {
-      id: editingTradeId ?? `trade-${Date.now()}`,
+      id: effectiveId,
       name: form.name.trim(),
       typ: form.typ,
       basiswert: canonicalizeBasiswert(form.basiswert.trim()),
@@ -855,15 +867,52 @@ export default function App() {
       gewinn: statusClosed ? gewinn : undefined,
       status: statusClosed ? "Geschlossen" : "Offen"
     };
-    const updated = editingTradeId ? trades.map((trade) => (trade.id === editingTradeId ? next : trade)) : [next, ...trades];
-    setTrades(updated);
-    saveTradesToStorage(updated);
+    setTrades((prev) => {
+      const exists = prev.some((trade) => trade.id === effectiveId);
+      const updated = exists ? prev.map((trade) => (trade.id === effectiveId ? next : trade)) : [next, ...prev];
+      saveTradesToStorage(updated);
+      return updated;
+    });
+    if (finalize) {
+      newTradeDraftIdRef.current = null;
+      setForm(makeDefaultTradeForm());
+      setEditingTradeId(null);
+      setView("trades");
+    }
+    return true;
+  };
+
+  const saveNewTrade = () => {
+    persistTradeFromForm(true);
+  };
+
+  const autoSaveTradeRef = useRef<() => void>(() => {});
+  autoSaveTradeRef.current = () => {
+    persistTradeFromForm(false);
+  };
+
+  useEffect(() => {
+    if (view !== "newTrade") return;
+    const id = window.setInterval(() => autoSaveTradeRef.current(), 10_000);
+    return () => window.clearInterval(id);
+  }, [view]);
+
+  const cancelNewTradeView = () => {
+    const draftId = newTradeDraftIdRef.current;
+    if (draftId && !editingTradeId) {
+      setTrades((prev) => {
+        const next = prev.filter((trade) => trade.id !== draftId);
+        saveTradesToStorage(next);
+        return next;
+      });
+    }
+    newTradeDraftIdRef.current = null;
     setForm(makeDefaultTradeForm());
     setEditingTradeId(null);
-    setView("trades");
   };
 
   const startNewTrade = () => {
+    newTradeDraftIdRef.current = null;
     setEditingTradeId(null);
     setForm(makeDefaultTradeForm());
     setView("newTrade");
@@ -967,6 +1016,7 @@ export default function App() {
     }
   };
   const editTrade = (trade: Trade) => {
+    newTradeDraftIdRef.current = null;
     const qty = trade.stueck && trade.stueck > 0 ? trade.stueck : 1;
     setEditingTradeId(trade.id);
     setForm({
@@ -1141,6 +1191,7 @@ export default function App() {
           <NewTradeView
             editingTradeId={editingTradeId}
             language={appSettings.language}
+            financeService={appSettings.financeService}
             trades={trades}
             assetMeta={assetMeta}
             chartTheme={theme}
@@ -1150,10 +1201,10 @@ export default function App() {
             gewinn={gewinn}
             rendite={rendite}
             haltedauer={haltedauer}
+            canSaveTrade={canSaveTrade}
             onSaveNewTrade={saveNewTrade}
             onSetViewTrades={() => setView("trades")}
-            onResetForm={() => setForm(makeDefaultTradeForm())}
-            onCancelEdit={() => setEditingTradeId(null)}
+            onCancelNewTradeView={cancelNewTradeView}
           />
         )}
         {view === "assets" && (

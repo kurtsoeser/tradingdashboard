@@ -3,9 +3,16 @@ import { Activity, Search } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
-import { searchByIsinOpenFigi, searchByWknOpenFigi, searchSymbolsOpenFigi, type OpenFigiSearchHit } from "../../lib/openFigiSearch";
+import {
+  searchByIsinOpenFigi,
+  searchByWknOpenFigi,
+  searchSymbolsOpenFigi,
+  tradingViewSymbolFromOpenFigiHit,
+  type OpenFigiSearchHit
+} from "../../lib/openFigiSearch";
 import { resolvePlainTickerForTradingView } from "../../data/tickerTradingViewAliases";
 import { lookupKnownTickerSuggestion, normalizeBasiswertKey } from "../../data/knownAssetTickers";
+import { buildLiveFinancePortalUrl, type LiveFinancePortalProvider } from "../../lib/financeLinks";
 
 interface IsinLiveViewProps {
   language: AppSettings["language"];
@@ -182,7 +189,29 @@ export function IsinLiveView({ language, chartTheme }: IsinLiveViewProps) {
     () => (selectedHitRaw && isAllowedByCurrency(selectedHitRaw) ? selectedHitRaw : filteredHits[0] ?? null),
     [selectedHitRaw, filteredHits, allowEur, allowUsd]
   );
-  const selectedSymbol = directSymbol || (selectedHit ? resolvePlainTickerForTradingView(selectedHit.ticker) : null);
+  const selectedSymbol = directSymbol || (selectedHit ? tradingViewSymbolFromOpenFigiHit(selectedHit) : null);
+  const portalSearchTerm = useMemo(() => {
+    if (selectedSymbol) {
+      const parts = selectedSymbol.split(":");
+      const tail = (parts[1] ?? parts[0]).trim();
+      if (tail) return tail.toUpperCase();
+    }
+    return normalizedQuery;
+  }, [selectedSymbol, normalizedQuery]);
+  const majorPortalLinks = useMemo(() => {
+    if (!portalSearchTerm) return [];
+    const keys: LiveFinancePortalProvider[] = ["google", "yahoo", "microsoft"];
+    return keys.map((key) => ({
+      key,
+      url: buildLiveFinancePortalUrl(portalSearchTerm, key),
+      label:
+        key === "google"
+          ? t(language, "liveLookupPortalGoogle")
+          : key === "yahoo"
+            ? t(language, "liveLookupPortalYahoo")
+            : t(language, "liveLookupPortalMicrosoft")
+    }));
+  }, [portalSearchTerm, language]);
   const providerLinks = useMemo(() => {
     if (!normalizedQuery) return [];
     const q = encodeURIComponent(normalizedQuery);
@@ -463,6 +492,18 @@ export function IsinLiveView({ language, chartTheme }: IsinLiveViewProps) {
               </a>
             ))}
           </div>
+        )}
+        {majorPortalLinks.length > 0 && (
+          <>
+            <p className="live-chart-hint live-chart-hint-compact">{t(language, "liveLookupPortalTitle")}</p>
+            <div className="live-provider-links">
+              {majorPortalLinks.map((item) => (
+                <a key={item.key} className="secondary slim" href={item.url} target="_blank" rel="noreferrer">
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

@@ -12,6 +12,7 @@ export function normalizeBasiswertKey(raw: string): string {
     .trim()
     .toLowerCase()
     .replace(/\./g, "")
+    .replace(/-/g, " ")
     .replace(/\s+/g, " ");
 }
 
@@ -218,10 +219,17 @@ export const KNOWN_TICKER_SUGGESTIONS: Record<string, KnownTickerSuggestion> = {
   sp500: { ticker: "TVC:SPX" },
   "sp 500": { ticker: "TVC:SPX" },
   nasdaq100: { ticker: "NASDAQ:NDX" },
-  "nasdaq 100": { ticker: "NASDAQ:NDX" }
+  "nasdaq 100": { ticker: "NASDAQ:NDX" },
+  "nasdaq 100 index": { ticker: "NASDAQ:NDX" },
+  ndx: { ticker: "NASDAQ:NDX" }
 };
 
 export function lookupKnownTickerSuggestion(basiswertName: string): KnownTickerSuggestion | undefined {
   const key = normalizeBasiswertKey(basiswertName);
   return KNOWN_TICKER_SUGGESTIONS[key];
+}
+
+/** Bekannte Zuordnung für kanonischen und Roh-Basiswert (Merge-Kanonik kann vom Eingabetext abweichen). */
+export function lookupKnownTickerSuggestionDual(canonicalName: string, rawName: string): KnownTickerSuggestion | undefined {
+  return lookupKnownTickerSuggestion(canonicalName) ?? lookupKnownTickerSuggestion(rawName);
 }
