@@ -205,18 +205,42 @@ export default function App() {
     });
   }, [trades, search, statusFilter, typFilter, basiswertFilter]);
 
+  const getTradeDateKeys = (trade: Trade): string[] => {
+    const keys = new Set<string>();
+    const kaufDate = parseStoredDateTime(trade.kaufzeitpunkt);
+    if (kaufDate) {
+      keys.add(`${kaufDate.getFullYear()}-${`${kaufDate.getMonth() + 1}`.padStart(2, "0")}-${`${kaufDate.getDate()}`.padStart(2, "0")}`);
+    }
+    const verkaufDate = parseStoredDateTime(trade.verkaufszeitpunkt);
+    if (verkaufDate) {
+      keys.add(`${verkaufDate.getFullYear()}-${`${verkaufDate.getMonth() + 1}`.padStart(2, "0")}-${`${verkaufDate.getDate()}`.padStart(2, "0")}`);
+    }
+    return [...keys];
+  };
+
+  const getTradeDateTimes = (trade: Trade): Date[] => {
+    const dates: Date[] = [];
+    const kaufDate = parseStoredDateTime(trade.kaufzeitpunkt);
+    if (kaufDate) dates.push(kaufDate);
+    const verkaufDate = parseStoredDateTime(trade.verkaufszeitpunkt);
+    if (verkaufDate) dates.push(verkaufDate);
+    return dates;
+  };
+
   const filteredTrades = useMemo(() => {
     const now = new Date();
     const dateRangeStart = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart < calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeStart;
     const dateRangeEnd = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart > calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeEnd;
     const base = baseFilteredTrades.filter((trade) => {
-      const tradeDate = parseStoredDateTime(trade.kaufzeitpunkt);
-      const matchesRange = rangeFilter === "Alle" || (tradeDate !== null && now.getTime() - tradeDate.getTime() <= Number.parseInt(rangeFilter, 10) * 24 * 60 * 60 * 1000);
+      const tradeDateTimes = getTradeDateTimes(trade);
+      const tradeDateKeys = getTradeDateKeys(trade);
+      const matchesRange =
+        rangeFilter === "Alle" ||
+        tradeDateTimes.some((tradeDate) => now.getTime() - tradeDate.getTime() <= Number.parseInt(rangeFilter, 10) * 24 * 60 * 60 * 1000);
       if (!matchesRange) return false;
       if (!dateRangeStart || !dateRangeEnd) return true;
-      if (!tradeDate) return false;
-      const key = `${tradeDate.getFullYear()}-${`${tradeDate.getMonth() + 1}`.padStart(2, "0")}-${`${tradeDate.getDate()}`.padStart(2, "0")}`;
-      return key >= dateRangeStart && key <= dateRangeEnd;
+      if (tradeDateKeys.length === 0) return false;
+      return tradeDateKeys.some((key) => key >= dateRangeStart && key <= dateRangeEnd);
     });
 
     return [...base].sort((a, b) => {
@@ -270,12 +294,15 @@ export default function App() {
   const tradesCalendarMap = useMemo(() => {
     const map = new Map<string, Trade[]>();
     baseFilteredTrades.forEach((trade) => {
-      const date = parseStoredDateTime(trade.kaufzeitpunkt);
-      if (!date || date.getFullYear() !== calendarMonth.getFullYear() || date.getMonth() !== calendarMonth.getMonth()) return;
-      const key = `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
-      const bucket = map.get(key) ?? [];
-      bucket.push(trade);
-      map.set(key, bucket);
+      getTradeDateKeys(trade).forEach((key) => {
+        const [yearRaw, monthRaw] = key.split("-");
+        const year = Number(yearRaw);
+        const monthIndex = Number(monthRaw) - 1;
+        if (year !== calendarMonth.getFullYear() || monthIndex !== calendarMonth.getMonth()) return;
+        const bucket = map.get(key) ?? [];
+        bucket.push(trade);
+        map.set(key, bucket);
+      });
     });
     return map;
   }, [baseFilteredTrades, calendarMonth]);
