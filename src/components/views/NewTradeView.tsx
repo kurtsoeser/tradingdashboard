@@ -164,7 +164,8 @@ export function NewTradeView({
     form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuellValue) ? kaufTransaktionManuellValue : stueckValue > 0 ? stueckValue * kaufStueckpreisValue : 0;
   const verkaufTransaktionValue =
     form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuellValue) ? verkaufTransaktionManuellValue : stueckValue > 0 ? stueckValue * verkaufStueckpreisValue : 0;
-  const verkaufSteuernValue = form.verkaufSteuern.trim() === "" ? verkaufTransaktionValue * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
+  const steuerpflichtigerGewinnValue = Math.max(0, verkaufTransaktionValue - kaufTransaktionValue);
+  const verkaufSteuernValue = form.verkaufSteuern.trim() === "" ? steuerpflichtigerGewinnValue * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
   const verkaufGebuehrenValue = Number.parseFloat(form.verkaufGebuehren) || 0;
   const kaufPreisCalculated = stueckValue > 0 ? kaufTransaktionValue + kaufGebuehrenValue : 0;
   const kaufPreisManuellValue = Number.parseFloat(form.kaufPreisManuell);
@@ -640,7 +641,7 @@ export function NewTradeView({
                 step="0.01"
                 value={form.verkaufSteuern}
                 onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                placeholder={verkaufTransaktionValue > 0 ? money(verkaufTransaktionValue * 0.275) : "0,00"}
+                placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
               />
             </label>
           </div>

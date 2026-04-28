@@ -912,7 +912,8 @@ export default function App() {
     form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : stueck > 0 ? stueck * kaufStueckpreis : 0;
   const verkaufTransaktion =
     form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : stueck > 0 ? stueck * verkaufStueckpreis : 0;
-  const verkaufSteuern = form.verkaufSteuern.trim() === "" ? verkaufTransaktion * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
+  const steuerpflichtigerGewinn = Math.max(0, verkaufTransaktion - kaufTransaktion);
+  const verkaufSteuern = form.verkaufSteuern.trim() === "" ? steuerpflichtigerGewinn * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
   const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
   const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
   const verkaufPreis = form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
