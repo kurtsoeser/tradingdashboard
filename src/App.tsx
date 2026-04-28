@@ -38,6 +38,8 @@ import { loadAiKnowledgeFromStorage, saveAiKnowledgeToStorage } from "./lib/aiKn
 import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
 import { toIsoWeekKey, toLocalYmd } from "./lib/journalIsoWeek";
 import { buildReconcileRows } from "./lib/isinWknReconcile";
+import { loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/cloudStorage";
+import { supabase, supabaseConfigured } from "./lib/supabaseClient";
 
 function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: string): string {
   const c = existing.trimEnd();
@@ -91,6 +93,15 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [journalData, setJournalData] = useState<JournalData>(() => loadJournalFromStorage());
   const [aiKnowledgeBase, setAiKnowledgeBase] = useState(() => loadAiKnowledgeFromStorage());
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudHydrating, setCloudHydrating] = useState(false);
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
@@ -177,6 +188,14 @@ export default function App() {
       kaufGebuehren: `${appSettings.defaultBuyFees ?? 0}`,
       verkaufGebuehren: `${appSettings.defaultSellFees ?? 0}`
     });
+  const buildSnapshot = (): CloudSnapshot => ({
+    trades,
+    assetMeta,
+    journalData,
+    aiKnowledgeBase,
+    appSettings,
+    theme
+  });
 
   const kpis = useMemo(() => getKpis(trades), [trades]);
   useEffect(() => {
@@ -202,6 +221,66 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-compact", appSettings.compactMode ? "true" : "false");
   }, [appSettings.compactMode]);
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user.id ?? null);
+      setAuthLoading(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user.id ?? null);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+  useEffect(() => {
+    if (!userId) {
+      setCloudReady(false);
+      return;
+    }
+    let cancelled = false;
+    const hydrate = async () => {
+      setCloudHydrating(true);
+      try {
+        const remote = await loadCloudSnapshot(userId);
+        if (cancelled) return;
+        if (remote) {
+          setTrades(Array.isArray(remote.trades) ? remote.trades : []);
+          saveTradesToStorage(Array.isArray(remote.trades) ? remote.trades : []);
+          setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
+          saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
+          setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
+          saveJournalToStorage(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
+          setAiKnowledgeBase(remote.aiKnowledgeBase ?? "");
+          saveAiKnowledgeToStorage(remote.aiKnowledgeBase ?? "");
+          if (remote.appSettings) setAppSettings({ ...defaultAppSettings, ...remote.appSettings });
+          if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
+        } else {
+          await saveCloudSnapshot(userId, buildSnapshot());
+        }
+        setCloudReady(true);
+      } catch (error) {
+        console.error("Cloud sync init failed:", error);
+      } finally {
+        if (!cancelled) setCloudHydrating(false);
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  useEffect(() => {
+    if (!userId || !cloudReady || cloudHydrating) return;
+    const id = window.setTimeout(() => {
+      void saveCloudSnapshot(userId, buildSnapshot()).catch((error) => {
+        console.error("Cloud save failed:", error);
+      });
+    }, 800);
+    return () => window.clearTimeout(id);
+  }, [userId, cloudReady, cloudHydrating, trades, assetMeta, journalData, aiKnowledgeBase, appSettings, theme]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -1114,6 +1193,111 @@ export default function App() {
     setCalendarRangeEnd(null);
   };
 
+  const handleAuthSubmit = async () => {
+    if (!supabase) return;
+    setAuthBusy(true);
+    setAuthError(null);
+    const email = authEmail.trim();
+    try {
+      if (authMode === "register") {
+        const { error } = await supabase.auth.signUp({ email, password: authPassword });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
+        if (error) throw error;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Authentifizierung fehlgeschlagen.";
+      setAuthError(message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setCloudReady(false);
+  };
+
+  if (!supabaseConfigured) {
+    return (
+      <div className="layout auth-layout">
+        <main className="content auth-page">
+          <section className="card auth-card auth-setup-card">
+            <h1>Supabase konfigurieren</h1>
+            <p>Bitte trage in deiner .env folgende Variablen ein und starte die App neu:</p>
+            <p><code>VITE_SUPABASE_URL</code> und <code>VITE_SUPABASE_ANON_KEY</code>.</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (authLoading || cloudHydrating) {
+    return (
+      <div className="layout auth-layout">
+        <main className="content auth-page">
+          <section className="card auth-card auth-loading-card">
+            <p>Lade Cloud-Daten ...</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div className="layout auth-layout">
+        <main className="content auth-page">
+          <section className="card auth-card">
+            <div className="auth-head">
+              <h1>{authMode === "login" ? "Willkommen zurück" : "Konto erstellen"}</h1>
+              <p>Logge dich ein, damit deine Daten automatisch über alle Geräte synchron bleiben.</p>
+            </div>
+            <div className="auth-form-grid">
+              <label>
+                <span className="field-title">E-Mail</span>
+                <input
+                  type="email"
+                  placeholder="name@beispiel.de"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="field-title">Passwort</span>
+                <input
+                  type="password"
+                  placeholder="Mindestens 6 Zeichen"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                />
+              </label>
+              <div className="auth-actions">
+                <button
+                  className="primary"
+                  onClick={handleAuthSubmit}
+                  disabled={authBusy || !authEmail.trim() || !authPassword}
+                >
+                  {authBusy ? "Bitte warten ..." : authMode === "login" ? "Einloggen" : "Account erstellen"}
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}
+                  disabled={authBusy}
+                >
+                  {authMode === "login" ? "Noch kein Konto? Registrieren" : "Schon ein Konto? Einloggen"}
+                </button>
+              </div>
+              {authError && <p className="auth-error">{authError}</p>}
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="layout">
       <SidebarNav
@@ -1127,6 +1311,9 @@ export default function App() {
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
       />
       <main className="content">
+        <div className="auth-topbar">
+          <button className="secondary slim" onClick={handleLogout}>Logout</button>
+        </div>
         {view === "dashboard" && (
           <DashboardView
             kpis={kpis}
