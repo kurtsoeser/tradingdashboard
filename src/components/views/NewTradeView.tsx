@@ -817,9 +817,14 @@ export function NewTradeView({
                     placeholder={Number.isFinite(incomeGrossValue) && incomeGrossValue > 0 ? money(-incomeGrossValue * incomeTaxRate) : "0,00"}
                   />
                 </label>
+                <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "profitEur")}</span>
                   <input value={money(gewinn)} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "returnPct")}</span>
+                  <input value={`${rendite.toFixed(2)}%`} disabled />
                 </label>
               </>
             ) : (
@@ -838,6 +843,7 @@ export function NewTradeView({
                     placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
                   />
                 </label>
+                <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "profitEur")}</span>
                   <input value={money(gewinn)} disabled />
@@ -845,10 +851,6 @@ export function NewTradeView({
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "returnPct")}</span>
                   <input value={`${rendite.toFixed(2)}%`} disabled />
-                </label>
-                <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "holdDays")}</span>
-                  <input value={`${haltedauer}`} disabled />
                 </label>
               </>
             )}
