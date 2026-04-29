@@ -918,13 +918,25 @@ export default function App() {
   const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
   const verkaufPreis = form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
   const statusClosed = !!form.verkaufszeitpunkt;
-  const gewinn = statusClosed ? verkaufPreis - kaufPreis : 0;
-  const rendite = kaufPreis > 0 ? (gewinn / kaufPreis) * 100 : 0;
+  const isCashflowType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
+  const hasKaufData =
+    (form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell)) ||
+    (form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell)) ||
+    (stueck > 0 && kaufStueckpreis > 0);
+  const kaufPreisEffective = isCashflowType && !hasKaufData ? 0 : kaufPreis;
+  const kaufGebuehrenEffective = isCashflowType && !hasKaufData ? 0 : kaufGebuehren;
+
+  const gewinn = statusClosed ? verkaufPreis - kaufPreisEffective : 0;
+  const rendite = kaufPreisEffective > 0 ? (gewinn / kaufPreisEffective) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
 
-  const isTaxCorrection = form.typ === "Steuerkorrektur";
-  const canSaveTrade = isTaxCorrection
-    ? !!form.name.trim() && !!form.basiswert.trim() && !!form.kaufzeitpunkt && !!form.verkaufszeitpunkt
+  const hasVerkaufData =
+    (form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)) ||
+    (form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)) ||
+    (stueck > 0 && verkaufStueckpreis > 0);
+
+  const canSaveTrade = isCashflowType
+    ? !!form.name.trim() && !!form.basiswert.trim() && !!form.verkaufszeitpunkt && hasVerkaufData
     : !!form.name.trim() &&
       !!form.basiswert.trim() &&
       !!form.kaufzeitpunkt &&
@@ -945,11 +957,11 @@ export default function App() {
       wkn: form.wkn.trim().toUpperCase() || undefined,
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
-      kaufPreis,
+      kaufPreis: kaufPreisEffective,
       stueck: stueck > 0 ? stueck : undefined,
       kaufStueckpreis: kaufStueckpreis > 0 ? kaufStueckpreis : undefined,
       kaufTransaktionManuell: form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : undefined,
-      kaufGebuehren: kaufGebuehren,
+      kaufGebuehren: kaufGebuehrenEffective,
       kaufPreisManuell: form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : undefined,
       verkaufszeitpunkt: statusClosed ? toDisplayDateTime(form.verkaufszeitpunkt) : undefined,
       verkaufPreis: statusClosed ? verkaufPreis : undefined,

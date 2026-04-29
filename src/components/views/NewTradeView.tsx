@@ -108,6 +108,7 @@ export function NewTradeView({
   const [isinLookupState, setIsinLookupState] = useState<"idle" | "loading" | "ok" | "empty" | "error">("idle");
   const [isinLiveSymbol, setIsinLiveSymbol] = useState<string | null>(null);
 
+  const disableBuyDataForCashflowTypes = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const normalizedIsin = form.isin.trim().toUpperCase();
   const isValidIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalizedIsin);
   const derivativeLiveQueriesChart = isDerivativeTradeTyp(form.typ);
@@ -442,7 +443,13 @@ export function NewTradeView({
           </label>
         </div>
 
-        <div className="card form-card card-span-1 calc-card">
+        <div
+          className="card form-card card-span-1 calc-card"
+          style={{
+            opacity: disableBuyDataForCashflowTypes ? 0.45 : 1,
+            pointerEvents: disableBuyDataForCashflowTypes ? "none" : "auto"
+          }}
+        >
           <div className="card-title-row">
             <h3>{t(language, "buyData")}</h3>
             <Landmark size={20} className="card-title-icon" />
@@ -456,6 +463,7 @@ export function NewTradeView({
                   value={kaufzeitpunktDisplay}
                   onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
                   onBlur={commitKaufzeitpunktDisplay}
+                  disabled={disableBuyDataForCashflowTypes}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -473,6 +481,7 @@ export function NewTradeView({
                     setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
                     setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
                   }}
+                  disabled={disableBuyDataForCashflowTypes}
                 >
                   <Clock3 size={14} />
                 </button>
@@ -487,6 +496,7 @@ export function NewTradeView({
                   min="0"
                   value={form.stueck}
                   onChange={(e) => handleStueckChange(e.target.value)}
+                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
@@ -496,6 +506,7 @@ export function NewTradeView({
                   min="0"
                   value={form.kaufStueckpreis}
                   onChange={(e) => setForm((prev) => ({ ...prev, kaufStueckpreis: e.target.value, kaufTransaktionManuell: "" }))}
+                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
@@ -515,6 +526,7 @@ export function NewTradeView({
                       };
                     })
                   }
+                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={kaufTransaktionValue > 0 ? kaufTransaktionValue.toFixed(2) : "0,00"}
                 />
               </div>
@@ -526,6 +538,7 @@ export function NewTradeView({
                 step="0.01"
                 value={form.kaufGebuehren}
                 onChange={(e) => setForm((prev) => ({ ...prev, kaufGebuehren: e.target.value }))}
+                disabled={disableBuyDataForCashflowTypes}
                 placeholder="0,00"
               />
             </label>
@@ -540,6 +553,7 @@ export function NewTradeView({
                 step="0.01"
                 value={form.kaufPreisManuell !== "" ? form.kaufPreisManuell : kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, kaufPreisManuell: e.target.value }))}
+                disabled={disableBuyDataForCashflowTypes}
                 placeholder={kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : "0,00"}
               />
             </label>
