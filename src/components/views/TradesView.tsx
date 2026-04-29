@@ -180,7 +180,8 @@ export function TradesView(props: TradesViewProps) {
         label: t(props.language, "sell"),
         sortable: "verkauf" as TradesSortField,
         draggable: true,
-        render: (trade: Trade) => formatDateTimeAT(trade.verkaufszeitpunkt)
+        render: (trade: Trade) =>
+          formatDateTimeAT(["Steuerkorrektur", "Dividende", "Zinszahlung"].includes(trade.typ) ? trade.kaufzeitpunkt : trade.verkaufszeitpunkt)
       },
       name: {
         id: "name" satisfies ColumnId,
@@ -200,7 +201,7 @@ export function TradesView(props: TradesViewProps) {
         id: "basiswert" satisfies ColumnId,
         label: t(props.language, "basiswert"),
         draggable: true,
-        render: (trade: Trade) => trade.basiswert
+        render: (trade: Trade) => trade.basiswert?.trim() ? trade.basiswert : "-"
       },
       extern: {
         id: "extern" satisfies ColumnId,

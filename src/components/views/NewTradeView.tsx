@@ -116,6 +116,7 @@ export function NewTradeView({
   const isInterestType = form.typ === "Zinszahlung";
   const isDividendType = form.typ === "Dividende";
   const isIncomeType = isInterestType || isDividendType;
+  const isNoBasiswertType = isTaxCorrectionType || isInterestType;
   const isCashflowBookingType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const buyTimeLabelKey = isCashflowBookingType ? "bookingDate" : "buyTime";
   const disableBuyDataForCashflowTypes = isIncomeType;
@@ -132,9 +133,8 @@ export function NewTradeView({
     return form.name.trim();
   }, [derivativeLiveQueriesChart, isValidIsin, normalizedIsin, form.wkn, form.basiswert, form.name]);
   const showLiveChartCard =
-    !!form.isin.trim() ||
-    !!form.basiswert.trim() ||
-    (derivativeLiveQueriesChart && (!!form.wkn.trim() || !!form.name.trim()));
+    !isCashflowBookingType &&
+    (!!form.isin.trim() || !!form.basiswert.trim() || (derivativeLiveQueriesChart && (!!form.wkn.trim() || !!form.name.trim())));
 
   useEffect(() => {
     setKaufzeitpunktDisplay(formatDateTimeDisplay(form.kaufzeitpunkt));
@@ -409,14 +409,16 @@ export function NewTradeView({
                 <option value="Steuerkorrektur">Steuerkorrektur</option>
               </select>
             </label>
-            <label>
-              <span className="field-title">{t(language, "basiswertRequired")}</span>
-              <input
-                value={form.basiswert}
-                onChange={(e) => setForm((prev) => ({ ...prev, basiswert: e.target.value }))}
-                placeholder={t(language, "placeholderBasiswert")}
-              />
-            </label>
+            {!isNoBasiswertType && (
+              <label>
+                <span className="field-title">{t(language, "basiswertRequired")}</span>
+                <input
+                  value={form.basiswert}
+                  onChange={(e) => setForm((prev) => ({ ...prev, basiswert: e.target.value }))}
+                  placeholder={t(language, "placeholderBasiswert")}
+                />
+              </label>
+            )}
             <label>
               <span className="field-title">{t(language, "isinInputLabel")}</span>
               <input
@@ -681,7 +683,7 @@ export function NewTradeView({
         {isIncomeType && (
           <div className="card form-card card-span-1 calc-card">
             <div className="card-title-row">
-              <h3>{t(language, "sellData")}</h3>
+              <h3>{t(language, "booking")}</h3>
               <ChartCandlestick size={20} className="card-title-icon" />
             </div>
             <div className="form-grid trade-row-grid">
@@ -723,16 +725,6 @@ export function NewTradeView({
                   value={form.verkaufTransaktionManuell}
                   onChange={(e) => setForm((prev) => ({ ...prev, verkaufTransaktionManuell: e.target.value }))}
                   placeholder="0,00"
-                />
-              </label>
-              <label className="field-span-full calc-right-row tax-row">
-                <span className="field-title">{t(language, "taxEur")}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.verkaufSteuern}
-                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                  placeholder={Number.isFinite(incomeGrossValue) && incomeGrossValue > 0 ? money(-incomeGrossValue * incomeTaxRate) : "0,00"}
                 />
               </label>
             </div>
@@ -817,7 +809,13 @@ export function NewTradeView({
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "taxEur")}</span>
-                  <input value={money(steuerBetrag)} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.verkaufSteuern}
+                    onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                    placeholder={Number.isFinite(incomeGrossValue) && incomeGrossValue > 0 ? money(-incomeGrossValue * incomeTaxRate) : "0,00"}
+                  />
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "profitEur")}</span>
@@ -954,7 +952,7 @@ export function NewTradeView({
           </div>
         )}
 
-        <div className="card form-card asset-history-card card-span-1">
+        {!isNoBasiswertType && <div className="card form-card asset-history-card card-span-1">
           <div className="asset-history-title-row">
             <h3>
               {t(language, "assetHistory")}
@@ -1013,9 +1011,9 @@ export function NewTradeView({
               </div>
             </>
           )}
-        </div>
+        </div>}
 
-        <div className="card form-card card-span-1">
+        {!isNoBasiswertType && <div className="card form-card card-span-1">
           <div className="card-title-row">
             <h3>{t(language, "priceScenario")}</h3>
             <Activity size={20} className="card-title-icon" />
@@ -1035,7 +1033,7 @@ export function NewTradeView({
               {renderMiniBars(preisSzenario, "pl")}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       <div className="new-trade-actions">

@@ -50,6 +50,7 @@ function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: st
 
 function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boolean } {
   let changed = false;
+  const noBasiswertTypes = new Set<string>(["Steuerkorrektur", "Zinszahlung"]);
 
   const next = trades.map((trade) => {
     let t = trade;
@@ -61,6 +62,11 @@ function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boo
     const hasTaxes = t.verkaufSteuern !== undefined && Number.isFinite(t.verkaufSteuern);
     if (hasTaxes && t.typ !== "Steuerkorrektur" && (t.verkaufSteuern as number) > 0) {
       t = { ...t, verkaufSteuern: -Math.abs(t.verkaufSteuern as number) };
+      changed = true;
+    }
+
+    if (noBasiswertTypes.has(t.typ) && (t.basiswert ?? "").trim() !== "") {
+      t = { ...t, basiswert: "" };
       changed = true;
     }
 
@@ -1021,6 +1027,7 @@ export default function App() {
   const verkaufPreis = isTaxCorrectionType ? 0 : isIncomeType ? incomeNet : form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
   const statusClosed = isTaxCorrectionType || isIncomeType ? !!form.kaufzeitpunkt : !!form.verkaufszeitpunkt;
   const isCashflowType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
+  const isNoBasiswertType = form.typ === "Steuerkorrektur" || form.typ === "Zinszahlung";
   const hasKaufData =
     (form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell)) ||
     (form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell)) ||
@@ -1042,19 +1049,18 @@ export default function App() {
 
   const canSaveTrade = isTaxCorrectionType
     ? !!form.name.trim() &&
-      !!form.basiswert.trim() &&
       !!form.kaufzeitpunkt &&
       form.verkaufSteuern.trim() !== "" &&
       Number.isFinite(explicitTaxInput)
     : isIncomeType
     ? !!form.name.trim() &&
-      !!form.basiswert.trim() &&
+      (isNoBasiswertType || !!form.basiswert.trim()) &&
       !!form.kaufzeitpunkt &&
       form.verkaufTransaktionManuell.trim() !== "" &&
       Number.isFinite(verkaufTransaktionManuell) &&
       verkaufTransaktionManuell > 0
     : isCashflowType
-    ? !!form.name.trim() && !!form.basiswert.trim() && !!form.verkaufszeitpunkt && hasVerkaufData
+    ? !!form.name.trim() && (isNoBasiswertType || !!form.basiswert.trim()) && !!form.verkaufszeitpunkt && hasVerkaufData
     : !!form.name.trim() &&
       !!form.basiswert.trim() &&
       !!form.kaufzeitpunkt &&
@@ -1070,7 +1076,7 @@ export default function App() {
       id: effectiveId,
       name: form.name.trim(),
       typ: form.typ,
-      basiswert: canonicalizeBasiswert(form.basiswert.trim()),
+      basiswert: isNoBasiswertType ? "" : canonicalizeBasiswert(form.basiswert.trim()),
       isin: form.isin.trim() || undefined,
       wkn: form.wkn.trim().toUpperCase() || undefined,
       notiz: form.notiz.trim() || undefined,

@@ -122,6 +122,14 @@ export function buildAnalyticsData(trades: Trade[]) {
     .filter((trade) => trade.typ === correctionType)
     .reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
 
+  const incomeGrossFromTrade = (trade: Trade) => {
+    if (trade.verkaufTransaktionManuell !== undefined && Number.isFinite(trade.verkaufTransaktionManuell)) return trade.verkaufTransaktionManuell;
+    // Fallback für ältere Datensätze ohne expliziten Brutto-Wert.
+    return (trade.verkaufPreis ?? 0) - (trade.verkaufSteuern ?? 0) + (trade.verkaufGebuehren ?? 0);
+  };
+  const totalInterestGross = closedAll.filter((trade) => trade.typ === "Zinszahlung").reduce((sum, trade) => sum + incomeGrossFromTrade(trade), 0);
+  const totalDividendGross = closedAll.filter((trade) => trade.typ === "Dividende").reduce((sum, trade) => sum + incomeGrossFromTrade(trade), 0);
+
   const avgGain = winners.length ? winners.reduce((s, t) => s + getTradeRealizedPL(t), 0) / winners.length : 0;
   const avgLoss = losers.length ? losers.reduce((s, t) => s + getTradeRealizedPL(t), 0) / losers.length : 0;
   const profitableMonths = new Set<string>();
@@ -276,6 +284,8 @@ export function buildAnalyticsData(trades: Trade[]) {
     taxesTrading,
     taxesWithholding,
     taxesCorrections,
+    totalInterestGross,
+    totalDividendGross,
     feesToBuyPct: totalBuy > 0 ? (totalFeesAll / totalBuy) * 100 : 0,
     taxesToSellPct: totalSell > 0 ? (totalTaxesAll / totalSell) * 100 : 0,
     avgFeesPerTrade: closedAll.length > 0 ? totalFeesAll / closedAll.length : 0,

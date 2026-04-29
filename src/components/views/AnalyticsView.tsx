@@ -240,6 +240,14 @@ export function AnalyticsView({ language, analyticsData, analyticsTab, onAnalyti
                 <span>{t(language, "avgTaxesPerTrade")}</span>
                 <strong>{money(analyticsData.avgTaxesPerTrade)}</strong>
               </div>
+              <div>
+                <span>{t(language, "totalInterestGross")}</span>
+                <strong>{money(analyticsData.totalInterestGross)}</strong>
+              </div>
+              <div>
+                <span>{t(language, "totalDividendGross")}</span>
+                <strong>{money(analyticsData.totalDividendGross)}</strong>
+              </div>
             </div>
           </div>
 
