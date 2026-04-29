@@ -922,13 +922,15 @@ export default function App() {
   const rendite = kaufPreis > 0 ? (gewinn / kaufPreis) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
 
-  const canSaveTrade =
-    !!form.name.trim() &&
-    !!form.basiswert.trim() &&
-    !!form.kaufzeitpunkt &&
-    stueck > 0 &&
-    kaufStueckpreis > 0 &&
-    kaufPreis > 0;
+  const isTaxCorrection = form.typ === "Steuerkorrektur";
+  const canSaveTrade = isTaxCorrection
+    ? !!form.name.trim() && !!form.basiswert.trim() && !!form.kaufzeitpunkt && !!form.verkaufszeitpunkt
+    : !!form.name.trim() &&
+      !!form.basiswert.trim() &&
+      !!form.kaufzeitpunkt &&
+      stueck > 0 &&
+      kaufStueckpreis > 0 &&
+      kaufPreis > 0;
 
   const persistTradeFromForm = (finalize: boolean): boolean => {
     if (!canSaveTrade) return false;
