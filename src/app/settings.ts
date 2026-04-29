@@ -3,6 +3,8 @@ export type StartView = "dashboard" | "trades" | "assets" | "analytics" | "journ
 /** „off“ = kein API-Aufruf aus der App. */
 export type AiProvider = "off" | "google" | "anthropic" | "openai";
 
+export type TraderProviderId = "trade-republic" | "onvista";
+
 export interface AppSettings {
   currency: "EUR" | "USD" | "CHF" | "GBP";
   timezone: "Europe/Vienna" | "Europe/Berlin" | "UTC" | "America/New_York";
@@ -29,6 +31,12 @@ export interface AppSettings {
    * unabhängig von dieser Option — sofern direkter Gemini-Aufruf oder ein Proxy das Feld durchreicht.
    */
   aiGeminiGoogleSearchGrounding: boolean;
+
+  /**
+   * Externe Broker/Trader, die beim „Extern“-Symbol in Trades/Basiswerten verlinkt werden.
+   * (Ohne Login-Automation; nur Suche/Portal-Links.)
+   */
+  traderProviders: TraderProviderId[];
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -50,7 +58,9 @@ export const defaultAppSettings: AppSettings = {
   aiModel: "gemini-1.5-flash",
   aiApiKey: "",
   aiBackendUrl: "",
-  aiGeminiGoogleSearchGrounding: false
+  aiGeminiGoogleSearchGrounding: false,
+
+  traderProviders: ["trade-republic"]
 };
 
 export function readStoredAppSettings(): AppSettings {

@@ -1,10 +1,12 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, ExternalLink, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
 import type { Trade } from "../../types/trade";
+import { buildTraderSearchUrl, getTraderProviderDisplayNameForLanguage, getTraderSearchQueryForTrade, traderProviderShortLabel } from "../../lib/traderLinks";
 import { PageHeader } from "../PageHeader";
 
 interface TradesViewProps {
@@ -58,11 +60,333 @@ interface TradesViewProps {
   onSetSingleDayFilter: (dateKey: string) => void;
   calendarWeekdayNames: string[];
   language: AppSettings["language"];
+  traderProviders: AppSettings["traderProviders"];
 }
 
 export function TradesView(props: TradesViewProps) {
   const toDateKey = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
+
+  const columnPrefsKey = "trades-columns-v1";
+
+  type ColumnId =
+    | "status"
+    | "kaufzeitpunkt"
+    | "verkaufszeitpunkt"
+    | "name"
+    | "typ"
+    | "basiswert"
+    | "extern"
+    | "isin"
+    | "wkn"
+    | "kaufPreis"
+    | "verkaufPreis"
+    | "tradeTaxes"
+    | "gewinn"
+    | "rendite"
+    | "action";
+
+  const defaultVisible: Record<ColumnId, boolean> = {
+    status: true,
+    kaufzeitpunkt: true,
+    verkaufszeitpunkt: true,
+    name: true,
+    typ: true,
+    basiswert: true,
+    extern: true,
+    isin: true,
+    wkn: true,
+    kaufPreis: true,
+    verkaufPreis: true,
+    tradeTaxes: true,
+    gewinn: true,
+    rendite: true,
+    action: true
+  };
+
+  const defaultOrder: ColumnId[] = [
+    "status",
+    "kaufzeitpunkt",
+    "verkaufszeitpunkt",
+    "name",
+    "typ",
+    "basiswert",
+    "extern",
+    "isin",
+    "wkn",
+    "kaufPreis",
+    "verkaufPreis",
+    "tradeTaxes",
+    "gewinn",
+    "rendite",
+    "action"
+  ];
+
+  const initialPrefs = useMemo(() => {
+    if (typeof window === "undefined") return { order: defaultOrder, visible: defaultVisible };
+    try {
+      const raw = window.localStorage.getItem(columnPrefsKey);
+      if (!raw) return { order: defaultOrder, visible: defaultVisible };
+      const parsed = JSON.parse(raw) as { order?: ColumnId[]; visible?: Partial<Record<ColumnId, boolean>> };
+      const order = Array.isArray(parsed.order) && parsed.order.length ? parsed.order.filter((id) => id in defaultVisible) : defaultOrder;
+      const visible = { ...defaultVisible, ...(parsed.visible ?? {}) };
+      // Stelle sicher, dass alle IDs existieren.
+      defaultOrder.forEach((id) => {
+        if (!(id in visible)) visible[id] = defaultVisible[id];
+      });
+      // Fehlende IDs ans Ende hängen.
+      const missing = defaultOrder.filter((id) => !order.includes(id));
+      return { order: [...order, ...missing], visible };
+    } catch {
+      return { order: defaultOrder, visible: defaultVisible };
+    }
+  }, [columnPrefsKey]);
+
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(initialPrefs.order);
+  const [visibleById, setVisibleById] = useState<Record<ColumnId, boolean>>(initialPrefs.visible);
+  const dragIdRef = useRef<ColumnId | null>(null);
+  const didDragRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(columnPrefsKey, JSON.stringify({ order: columnOrder, visible: visibleById }));
+    } catch {
+      // Ignoriere Storage-Fehler (z.B. private browsing).
+    }
+  }, [columnOrder, visibleById]);
+
+  const alwaysVisible = useMemo(() => new Set<ColumnId>(["status", "action"]), []);
+
+  const columnDefs = (() => {
+    const defs: Record<ColumnId, any> = {
+      status: {
+        id: "status" satisfies ColumnId,
+        label: "",
+        visible: true,
+        draggable: true,
+        render: (trade: Trade) => (
+          <>{isTradeClosed(trade) ? <CheckCircle2 size={16} className="status-icon closed" /> : <Circle size={16} className="status-icon open" />}</>
+        )
+      },
+      kaufzeitpunkt: {
+        id: "kaufzeitpunkt" satisfies ColumnId,
+        label: t(props.language, "buy"),
+        sortable: "kauf" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => formatDateTimeAT(trade.kaufzeitpunkt)
+      },
+      verkaufszeitpunkt: {
+        id: "verkaufszeitpunkt" satisfies ColumnId,
+        label: t(props.language, "sell"),
+        sortable: "verkauf" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => formatDateTimeAT(trade.verkaufszeitpunkt)
+      },
+      name: {
+        id: "name" satisfies ColumnId,
+        label: t(props.language, "name"),
+        sortable: "name" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => trade.name
+      },
+      typ: {
+        id: "typ" satisfies ColumnId,
+        label: t(props.language, "type"),
+        sortable: "typ" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => trade.typ
+      },
+      basiswert: {
+        id: "basiswert" satisfies ColumnId,
+        label: t(props.language, "basiswert"),
+        draggable: true,
+        render: (trade: Trade) => trade.basiswert
+      },
+      extern: {
+        id: "extern" satisfies ColumnId,
+        label: t(props.language, "extern"),
+        draggable: true,
+        render: (trade: Trade) => <>{renderTraderLinkCell(trade)}</>
+      },
+      isin: {
+        id: "isin" satisfies ColumnId,
+        label: "ISIN",
+        draggable: true,
+        render: (trade: Trade) => trade.isin || "-"
+      },
+      wkn: {
+        id: "wkn" satisfies ColumnId,
+        label: "WKN",
+        draggable: true,
+        render: (trade: Trade) => trade.wkn || "-"
+      },
+      kaufPreis: {
+        id: "kaufPreis" satisfies ColumnId,
+        label: t(props.language, "buyEur"),
+        sortable: "kaufPreis" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => money(trade.kaufPreis)
+      },
+      verkaufPreis: {
+        id: "verkaufPreis" satisfies ColumnId,
+        label: t(props.language, "sellEur"),
+        sortable: "verkaufPreis" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => (trade.verkaufPreis ? money(trade.verkaufPreis) : "-")
+      },
+      tradeTaxes: {
+        id: "tradeTaxes" satisfies ColumnId,
+        label: t(props.language, "tradeTaxes"),
+        draggable: true,
+        render: (trade: Trade) => (trade.verkaufSteuern !== undefined ? money(trade.verkaufSteuern) : "-")
+      },
+      gewinn: {
+        id: "gewinn" satisfies ColumnId,
+        label: t(props.language, "profit"),
+        sortable: "gewinn" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) =>
+          trade.typ === "Steuerkorrektur" ? "-" : <span className={getTradeRealizedPL(trade) >= 0 ? "positive" : "negative"}>{money(getTradeRealizedPL(trade))}</span>
+      },
+      rendite: {
+        id: "rendite" satisfies ColumnId,
+        label: t(props.language, "pct"),
+        sortable: "rendite" as TradesSortField,
+        draggable: true,
+        render: (trade: Trade) => {
+          if (trade.typ === "Steuerkorrektur") return "-";
+          if (trade.kaufPreis > 0 && isTradeClosed(trade)) {
+            const v = (getTradeRealizedPL(trade) / trade.kaufPreis) * 100;
+            return (
+              <span className={v >= 0 ? "positive" : "negative"}>{`${v.toFixed(1)}%`}</span>
+            );
+          }
+          return "-";
+        }
+      },
+      action: {
+        id: "action" satisfies ColumnId,
+        label: t(props.language, "action"),
+        draggable: false,
+        render: (trade: Trade) => (
+          <div className="table-actions">
+            <button
+              type="button"
+              className="icon-btn action delete"
+              title={t(props.language, "delete")}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onDeleteTrade(trade.id);
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )
+      }
+    };
+    return defs as Record<ColumnId, { id: ColumnId; label: string; sortable?: TradesSortField; draggable: boolean; render: (trade: Trade) => JSX.Element | string | null }>;
+  })();
+
+  const renderedColumns = useMemo(() => columnOrder.filter((id) => visibleById[id]), [columnOrder, visibleById]);
+
+  const reorderVisibleColumns = (from: ColumnId, to: ColumnId) => {
+    if (from === to) return;
+    setColumnOrder((prev) => {
+      const prevVisible = prev.filter((id) => visibleById[id]);
+      const fromIdx = prevVisible.indexOf(from);
+      const toIdx = prevVisible.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+
+      const nextVisible = [...prevVisible];
+      nextVisible.splice(fromIdx, 1);
+      const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+      nextVisible.splice(insertAt, 0, from);
+
+      // Ordne nur die sichtbaren Elemente um; versteckte bleiben exakt an ihrer bisherigen Position.
+      const nextFull = [...prev];
+      let v = 0;
+      for (let i = 0; i < nextFull.length; i++) {
+        if (visibleById[nextFull[i]]) nextFull[i] = nextVisible[v++];
+      }
+      return nextFull;
+    });
+  };
+
+  const renderTraderLinkCell = (trade: Trade) => {
+    const providers = props.traderProviders;
+    if (!providers.length) return null;
+
+    const query = getTraderSearchQueryForTrade(trade);
+    const primary = providers[0];
+    const primaryUrl = buildTraderSearchUrl(primary, query);
+
+    const openLabel = t(props.language, "externOpen", { provider: getTraderProviderDisplayNameForLanguage(props.language, primary) });
+
+    if (providers.length === 1) {
+      return (
+        <a
+          className="secondary slim finance-link-btn icon-only"
+          href={primaryUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={openLabel}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span style={{ fontWeight: 800, fontSize: 12 }}>{traderProviderShortLabel(primary)}</span>
+        </a>
+      );
+    }
+
+    return (
+      <div className="table-actions" onClick={(e) => e.stopPropagation()}>
+        <a
+          className="secondary slim finance-link-btn icon-only"
+          href={primaryUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={openLabel}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span style={{ fontWeight: 800, fontSize: 12 }}>{traderProviderShortLabel(primary)}</span>
+        </a>
+
+        <details className="actions-dropdown">
+          <summary
+            className="secondary finance-link-btn icon-only"
+            style={{ padding: 0, cursor: "pointer" }}
+            title={t(props.language, "extern")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChevronDown size={14} />
+          </summary>
+          <div className="actions-dropdown-menu">
+            {providers.map((providerId) => {
+              const url = buildTraderSearchUrl(providerId, query);
+              const label = getTraderProviderDisplayNameForLanguage(props.language, providerId);
+              return (
+                <a
+                  key={providerId}
+                  className="actions-dropdown-item"
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="actions-dropdown-item-content">
+                    <ExternalLink size={14} />
+                    {label}
+                    <span style={{ marginLeft: 6, color: "var(--muted)", fontWeight: 700 }}>{traderProviderShortLabel(providerId)}</span>
+                  </span>
+                  <small style={{ wordBreak: "break-word" }}>{query || "—"}</small>
+                </a>
+              );
+            })}
+          </div>
+        </details>
+      </div>
+    );
+  };
 
   return (
     <section className="section trades-page">
@@ -324,86 +648,87 @@ export function TradesView(props: TradesViewProps) {
       </div>
 
       <div className="card">
+        <div className="table-columns-controls">
+          <details className="actions-dropdown">
+            <summary className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Layers size={14} />
+              {t(props.language, "columns")}
+              <ChevronDown size={14} />
+            </summary>
+            <div className="actions-dropdown-menu">
+              {defaultOrder
+                .filter((id) => !alwaysVisible.has(id))
+                .map((id) => (
+                  <label
+                    key={id}
+                    className="actions-dropdown-item"
+                    style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 10 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleById[id]}
+                      onChange={() => setVisibleById((prev) => ({ ...prev, [id]: !prev[id] }))}
+                    />
+                    <span>{columnDefs[id].label}</span>
+                  </label>
+                ))}
+            </div>
+          </details>
+        </div>
+
         <table>
           <thead>
             <tr>
-              <th></th>
-              <th onClick={() => props.onToggleSort("kauf")} className="sortable">
-                {t(props.language, "buy")}
-                {props.sortMarker("kauf")}
-              </th>
-              <th onClick={() => props.onToggleSort("verkauf")} className="sortable">
-                {t(props.language, "sell")}
-                {props.sortMarker("verkauf")}
-              </th>
-              <th onClick={() => props.onToggleSort("name")} className="sortable">
-                {t(props.language, "name")}
-                {props.sortMarker("name")}
-              </th>
-              <th onClick={() => props.onToggleSort("typ")} className="sortable">
-                {t(props.language, "type")}
-                {props.sortMarker("typ")}
-              </th>
-              <th>{t(props.language, "basiswert")}</th>
-              <th>ISIN</th>
-              <th>WKN</th>
-              <th onClick={() => props.onToggleSort("kaufPreis")} className="sortable">
-                {t(props.language, "buyEur")}
-                {props.sortMarker("kaufPreis")}
-              </th>
-              <th onClick={() => props.onToggleSort("verkaufPreis")} className="sortable">
-                {t(props.language, "sellEur")}
-                {props.sortMarker("verkaufPreis")}
-              </th>
-              <th onClick={() => props.onToggleSort("gewinn")} className="sortable">
-                {t(props.language, "profit")}
-                {props.sortMarker("gewinn")}
-              </th>
-              <th onClick={() => props.onToggleSort("rendite")} className="sortable">
-                {t(props.language, "pct")}
-                {props.sortMarker("rendite")}
-              </th>
-              <th>{t(props.language, "action")}</th>
+              {renderedColumns.map((id) => {
+                const def = columnDefs[id];
+                const canDrag = def.draggable && !alwaysVisible.has(id);
+                const sortableField = def.sortable as TradesSortField | undefined;
+                return (
+                  <th
+                    key={id}
+                    className={sortableField ? "sortable" : id === "extern" ? "trader-col" : undefined}
+                    draggable={canDrag}
+                    onDragStart={() => {
+                      if (!canDrag) return;
+                      didDragRef.current = false;
+                      dragIdRef.current = id;
+                    }}
+                    onDragOver={(e) => {
+                      if (!canDrag) return;
+                      e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      if (!canDrag) return;
+                      e.preventDefault();
+                      const from = dragIdRef.current;
+                      dragIdRef.current = null;
+                      if (from && from !== id) reorderVisibleColumns(from, id);
+                      didDragRef.current = true;
+                      window.setTimeout(() => {
+                        didDragRef.current = false;
+                      }, 0);
+                    }}
+                    onClick={() => {
+                      if (didDragRef.current) return;
+                      if (sortableField) props.onToggleSort(sortableField);
+                    }}
+                  >
+                    {def.label}
+                    {sortableField ? props.sortMarker(sortableField) : null}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {props.filteredTrades.slice(0, 500).map((trade) => (
               <tr key={trade.id} className="trades-row-open-edit" onClick={() => props.onEditTrade(trade)} title={t(props.language, "edit")}>
-                <td>{isTradeClosed(trade) ? <CheckCircle2 size={16} className="status-icon closed" /> : <Circle size={16} className="status-icon open" />}</td>
-                <td>{formatDateTimeAT(trade.kaufzeitpunkt)}</td>
-                <td>{formatDateTimeAT(trade.verkaufszeitpunkt)}</td>
-                <td>{trade.name}</td>
-                <td>{trade.typ}</td>
-                <td>{trade.basiswert}</td>
-                <td>{trade.isin || "-"}</td>
-                <td>{trade.wkn || "-"}</td>
-                <td>{money(trade.kaufPreis)}</td>
-                <td>{trade.verkaufPreis ? money(trade.verkaufPreis) : "-"}</td>
-                <td className={getTradeRealizedPL(trade) >= 0 ? "positive" : "negative"}>{money(getTradeRealizedPL(trade))}</td>
-                <td>
-                  {trade.kaufPreis > 0 && isTradeClosed(trade) ? (
-                    <span className={(getTradeRealizedPL(trade) / trade.kaufPreis) * 100 >= 0 ? "positive" : "negative"}>
-                      {`${((getTradeRealizedPL(trade) / trade.kaufPreis) * 100).toFixed(1)}%`}
-                    </span>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td>
-                  <div className="table-actions">
-                    <button
-                      type="button"
-                      className="icon-btn action delete"
-                      title={t(props.language, "delete")}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        props.onDeleteTrade(trade.id);
-                      }}
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                </td>
+                {renderedColumns.map((id) => (
+                  <td key={id} className={id === "extern" ? "trader-col" : undefined}>
+                    {columnDefs[id].render(trade)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

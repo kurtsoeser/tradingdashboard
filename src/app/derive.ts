@@ -88,23 +88,45 @@ export function buildAssetRows(trades: Trade[]): AssetRow[] {
 }
 
 export function buildAnalyticsData(trades: Trade[]) {
-  const closed = trades.filter((trade) => isTradeClosed(trade));
-  if (closed.length === 0) return null;
+  const closedAll = trades.filter((trade) => isTradeClosed(trade));
+  if (closedAll.length === 0) return null;
 
-  const plValues = closed.map((trade) => getTradeRealizedPL(trade));
-  const winners = closed.filter((trade) => getTradeRealizedPL(trade) > 0);
-  const losers = closed.filter((trade) => getTradeRealizedPL(trade) < 0);
+  const cashflowTypes = new Set<string>(["Dividende", "Zinszahlung"]);
+  const correctionType = "Steuerkorrektur";
+
+  // Cashflow-Events (Dividende/Zins) und Steuerkorrekturen sind keine Positions-Trades.
+  // Für P&L-/Winrate-/Positionsgrößen-/Timing-Statistiken daher rausfiltern,
+  // aber für Kosten/Steuern selbstverständlich mitführen.
+  const plTrades = closedAll.filter((trade) => trade.typ !== correctionType && !cashflowTypes.has(trade.typ));
+
+  const plValues = plTrades.map((trade) => getTradeRealizedPL(trade));
+  const winners = plTrades.filter((trade) => getTradeRealizedPL(trade) > 0);
+  const losers = plTrades.filter((trade) => getTradeRealizedPL(trade) < 0);
+
   const totalPL = plValues.reduce((sum, value) => sum + value, 0);
-  const totalBuy = closed.reduce((sum, trade) => sum + (trade.kaufPreis ?? 0), 0);
-  const totalSell = closed.reduce((sum, trade) => sum + (trade.verkaufPreis ?? 0), 0);
-  const totalBuyFees = closed.reduce((sum, trade) => sum + (trade.kaufGebuehren ?? 0), 0);
-  const totalSellFees = closed.reduce((sum, trade) => sum + (trade.verkaufGebuehren ?? 0), 0);
-  const totalTaxes = closed.reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
-  const totalFees = totalBuyFees + totalSellFees;
+  const totalBuy = plTrades.reduce((sum, trade) => sum + (trade.kaufPreis ?? 0), 0);
+  const totalSell = plTrades.reduce((sum, trade) => sum + (trade.verkaufPreis ?? 0), 0);
+
+  // Steuern/Fees sollen inkl. Steuerkorrekturen vollständig abgebildet werden (für die Σ-Kacheln).
+  const totalBuyFeesAll = closedAll.reduce((sum, trade) => sum + (trade.kaufGebuehren ?? 0), 0);
+  const totalSellFeesAll = closedAll.reduce((sum, trade) => sum + (trade.verkaufGebuehren ?? 0), 0);
+  const totalTaxesAll = closedAll.reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
+  const totalFeesAll = totalBuyFeesAll + totalSellFeesAll;
+
+  // Hinweis: Prozent-/Quotienten sollen zur Anzeige im UI konsistent mit den Summen sein.
+  const taxesTrading = plTrades.reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
+  const taxesWithholding = closedAll
+    .filter((trade) => cashflowTypes.has(trade.typ))
+    .reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
+  const taxesCorrections = closedAll
+    .filter((trade) => trade.typ === correctionType)
+    .reduce((sum, trade) => sum + (trade.verkaufSteuern ?? 0), 0);
+
   const avgGain = winners.length ? winners.reduce((s, t) => s + getTradeRealizedPL(t), 0) / winners.length : 0;
   const avgLoss = losers.length ? losers.reduce((s, t) => s + getTradeRealizedPL(t), 0) / losers.length : 0;
   const profitableMonths = new Set<string>();
-  const monthBuckets = new Map<string, { pl: number; trades: number; wins: number; costs: number }>();
+  const plMonthBuckets = new Map<string, { pl: number; trades: number; wins: number }>();
+  const costMonthBuckets = new Map<string, { costs: number }>();
   const weekday = new Map<number, number>();
   const hour = new Map<number, number>();
   const sizeBuckets = new Map<string, number>();
@@ -122,18 +144,18 @@ export function buildAnalyticsData(trades: Trade[]) {
     return ">2.5k";
   };
 
-  closed.forEach((trade) => {
+  // 1) P&L-Statistiken (ohne Steuerkorrektur)
+  plTrades.forEach((trade) => {
     const pl = getTradeRealizedPL(trade);
     const date = parseStoredDateTime(trade.verkaufszeitpunkt) ?? parseStoredDateTime(trade.kaufzeitpunkt);
     if (date) {
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      const m = monthBuckets.get(monthKey) ?? { pl: 0, trades: 0, wins: 0, costs: 0 };
+      const m = plMonthBuckets.get(monthKey) ?? { pl: 0, trades: 0, wins: 0 };
       m.pl += pl;
       m.trades += 1;
       if (pl > 0) m.wins += 1;
-      m.costs += (trade.kaufGebuehren ?? 0) + (trade.verkaufGebuehren ?? 0) + (trade.verkaufSteuern ?? 0);
-      monthBuckets.set(monthKey, m);
+      plMonthBuckets.set(monthKey, m);
       tradingDays.add(dayKey);
       if (pl > 0) profitableMonths.add(monthKey);
 
@@ -173,6 +195,16 @@ export function buildAnalyticsData(trades: Trade[]) {
     }
   });
 
+  // 2) Kosten-/Steuer-Monatsübersicht (inkl. Steuerkorrektur)
+  closedAll.forEach((trade) => {
+    const date = parseStoredDateTime(trade.verkaufszeitpunkt) ?? parseStoredDateTime(trade.kaufzeitpunkt);
+    if (!date) return;
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const prev = costMonthBuckets.get(monthKey) ?? { costs: 0 };
+    prev.costs += (trade.kaufGebuehren ?? 0) + (trade.verkaufGebuehren ?? 0) + (trade.verkaufSteuern ?? 0);
+    costMonthBuckets.set(monthKey, prev);
+  });
+
   const mean = plValues.reduce((sum, v) => sum + v, 0) / (plValues.length || 1);
   const variance = plValues.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (plValues.length || 1);
   const stdDev = Math.sqrt(variance);
@@ -182,15 +214,19 @@ export function buildAnalyticsData(trades: Trade[]) {
   let peak = 0;
   let cum = 0;
   let maxDrawdown = 0;
-  [...closed]
-    .sort((a, b) => (parseStoredDateTime(a.verkaufszeitpunkt)?.getTime() ?? 0) - (parseStoredDateTime(b.verkaufszeitpunkt)?.getTime() ?? 0))
+  [...plTrades]
+    .sort(
+      (a, b) =>
+        (parseStoredDateTime(a.verkaufszeitpunkt)?.getTime() ?? parseStoredDateTime(a.kaufzeitpunkt)?.getTime() ?? 0) -
+        (parseStoredDateTime(b.verkaufszeitpunkt)?.getTime() ?? parseStoredDateTime(b.kaufzeitpunkt)?.getTime() ?? 0)
+    )
     .forEach((trade) => {
       cum += getTradeRealizedPL(trade);
       peak = Math.max(peak, cum);
       maxDrawdown = Math.max(maxDrawdown, peak - cum);
     });
 
-  const monthSeries = [...monthBuckets.entries()]
+  const monthSeries = [...plMonthBuckets.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, v]) => ({ month, ...v }));
 
@@ -200,10 +236,9 @@ export function buildAnalyticsData(trades: Trade[]) {
     return { ...m, cumulative };
   });
 
-  const monthCostChart = monthSeries.map((m) => ({
-    month: m.month,
-    costs: m.costs
-  }));
+  const monthCostChart = [...costMonthBuckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, v]) => ({ month, costs: v.costs }));
 
   const topAsset = [...assetPerf.entries()].sort((a, b) => b[1].pl - a[1].pl)[0];
   const flopAsset = [...assetPerf.entries()].sort((a, b) => a[1].pl - b[1].pl)[0];
@@ -211,13 +246,13 @@ export function buildAnalyticsData(trades: Trade[]) {
   const worstMonth = monthChart.reduce((worst, cur) => (cur.pl < (worst?.pl ?? Infinity) ? cur : worst), null as null | (typeof monthChart)[number]);
 
   return {
-    closedCount: closed.length,
+    closedCount: plTrades.length,
     winners: winners.length,
     losers: losers.length,
     bestSeries: (() => {
       let best = 0;
       let curr = 0;
-      closed.forEach((trade) => {
+      plTrades.forEach((trade) => {
         curr = getTradeRealizedPL(trade) > 0 ? curr + 1 : 0;
         best = Math.max(best, curr);
       });
@@ -226,7 +261,7 @@ export function buildAnalyticsData(trades: Trade[]) {
     worstSeries: (() => {
       let best = 0;
       let curr = 0;
-      closed.forEach((trade) => {
+      plTrades.forEach((trade) => {
         curr = getTradeRealizedPL(trade) < 0 ? curr + 1 : 0;
         best = Math.max(best, curr);
       });
@@ -234,22 +269,25 @@ export function buildAnalyticsData(trades: Trade[]) {
     })(),
     totalBuy,
     totalSell,
-    totalBuyFees,
-    totalSellFees,
-    totalFees,
-    totalTaxes,
-    feesToBuyPct: totalBuy > 0 ? (totalFees / totalBuy) * 100 : 0,
-    taxesToSellPct: totalSell > 0 ? (totalTaxes / totalSell) * 100 : 0,
-    avgFeesPerTrade: closed.length > 0 ? totalFees / closed.length : 0,
-    avgTaxesPerTrade: closed.length > 0 ? totalTaxes / closed.length : 0,
+    totalBuyFees: totalBuyFeesAll,
+    totalSellFees: totalSellFeesAll,
+    totalFees: totalFeesAll,
+    totalTaxes: totalTaxesAll,
+    taxesTrading,
+    taxesWithholding,
+    taxesCorrections,
+    feesToBuyPct: totalBuy > 0 ? (totalFeesAll / totalBuy) * 100 : 0,
+    taxesToSellPct: totalSell > 0 ? (totalTaxesAll / totalSell) * 100 : 0,
+    avgFeesPerTrade: closedAll.length > 0 ? totalFeesAll / closedAll.length : 0,
+    avgTaxesPerTrade: closedAll.length > 0 ? totalTaxesAll / closedAll.length : 0,
     totalPL,
-    avgPosition: totalBuy / (closed.length || 1),
-    minPosition: Math.min(...closed.map((t) => t.kaufPreis ?? 0)),
-    maxPosition: Math.max(...closed.map((t) => t.kaufPreis ?? 0)),
+    avgPosition: totalBuy / (plTrades.length || 1),
+    minPosition: plTrades.length ? Math.min(...plTrades.map((t) => t.kaufPreis ?? 0)) : 0,
+    maxPosition: plTrades.length ? Math.max(...plTrades.map((t) => t.kaufPreis ?? 0)) : 0,
     avgGain,
     avgLoss,
     profitFactor: Math.abs(grossLoss) > 0 ? grossGain / Math.abs(grossLoss) : 0,
-    expectancy: closed.length ? totalPL / closed.length : 0,
+    expectancy: plTrades.length ? totalPL / plTrades.length : 0,
     stdDev,
     maxDrawdown,
     totalLossTrades: losers.length,

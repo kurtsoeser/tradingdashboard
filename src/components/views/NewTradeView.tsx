@@ -43,6 +43,8 @@ interface NewTradeViewProps {
   form: NewTradeForm;
   setForm: React.Dispatch<React.SetStateAction<NewTradeForm>>;
   statusClosed: boolean;
+  differenz: number;
+  steuerBetrag: number;
   gewinn: number;
   rendite: number;
   haltedauer: number;
@@ -62,6 +64,8 @@ export function NewTradeView({
   form,
   setForm,
   statusClosed,
+  differenz,
+  steuerBetrag,
   gewinn,
   rendite,
   haltedauer,
@@ -108,7 +112,13 @@ export function NewTradeView({
   const [isinLookupState, setIsinLookupState] = useState<"idle" | "loading" | "ok" | "empty" | "error">("idle");
   const [isinLiveSymbol, setIsinLiveSymbol] = useState<string | null>(null);
 
-  const disableBuyDataForCashflowTypes = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
+  const isTaxCorrectionType = form.typ === "Steuerkorrektur";
+  const isInterestType = form.typ === "Zinszahlung";
+  const isDividendType = form.typ === "Dividende";
+  const isIncomeType = isInterestType || isDividendType;
+  const isCashflowBookingType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
+  const buyTimeLabelKey = isCashflowBookingType ? "bookingDate" : "buyTime";
+  const disableBuyDataForCashflowTypes = isIncomeType;
   const normalizedIsin = form.isin.trim().toUpperCase();
   const isValidIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalizedIsin);
   const derivativeLiveQueriesChart = isDerivativeTradeTyp(form.typ);
@@ -173,6 +183,8 @@ export function NewTradeView({
   const kaufPreisEffektiv =
     form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuellValue) ? kaufPreisManuellValue : kaufPreisCalculated;
   const verkaufserloesCalculated = stueckValue > 0 ? verkaufTransaktionValue - verkaufSteuernValue - verkaufGebuehrenValue : 0;
+  const incomeGrossValue = Number.parseFloat(form.verkaufTransaktionManuell);
+  const incomeTaxRate = isInterestType ? 0.2 : isDividendType ? 0.275 : 0;
   const basiswertStats = useMemo(() => {
     const normalizedBasiswert = form.basiswert.trim().toLowerCase();
     if (!normalizedBasiswert) return null;
@@ -443,20 +455,21 @@ export function NewTradeView({
           </label>
         </div>
 
-        <div
-          className="card form-card card-span-1 calc-card"
-          style={{
-            opacity: disableBuyDataForCashflowTypes ? 0.45 : 1,
-            pointerEvents: disableBuyDataForCashflowTypes ? "none" : "auto"
-          }}
-        >
+        {!isCashflowBookingType && (
+          <div
+            className="card form-card card-span-1 calc-card"
+            style={{
+              opacity: disableBuyDataForCashflowTypes ? 0.45 : 1,
+              pointerEvents: disableBuyDataForCashflowTypes ? "none" : "auto"
+            }}
+          >
           <div className="card-title-row">
             <h3>{t(language, "buyData")}</h3>
             <Landmark size={20} className="card-title-icon" />
           </div>
           <div className="form-grid trade-row-grid">
             <label className="field-span-full">
-              <span className="field-title">{t(language, "buyTime")}</span>
+              <span className="field-title">{t(language, buyTimeLabelKey)}</span>
               <div className="date-input-row">
                 <input
                   type="text"
@@ -558,9 +571,10 @@ export function NewTradeView({
               />
             </label>
           </div>
-        </div>
+          </div>
+        )}
 
-        <div className="card form-card card-span-1 calc-card">
+        {!isTaxCorrectionType && !isIncomeType && <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
             <h3>{t(language, "sellData")}</h3>
             <ChartCandlestick size={20} className="card-title-icon" />
@@ -648,16 +662,6 @@ export function NewTradeView({
               />
             </label>
             <div className="field-spacer field-span-full" aria-hidden="true" />
-            <label className="field-span-full calc-right-row tax-row">
-              <span className="field-title">{t(language, "taxDefault")}</span>
-              <input
-                type="number"
-                step="0.01"
-                value={form.verkaufSteuern}
-                onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
-              />
-            </label>
           </div>
           <div className="calc-footer">
             <div className="calc-separator" aria-hidden="true" />
@@ -672,29 +676,184 @@ export function NewTradeView({
               />
             </label>
           </div>
-        </div>
+        </div>}
+
+        {isIncomeType && (
+          <div className="card form-card card-span-1 calc-card">
+            <div className="card-title-row">
+              <h3>{t(language, "sellData")}</h3>
+              <ChartCandlestick size={20} className="card-title-icon" />
+            </div>
+            <div className="form-grid trade-row-grid">
+              <label className="field-span-full">
+                <span className="field-title">{t(language, buyTimeLabelKey)}</span>
+                <div className="date-input-row">
+                  <input
+                    type="text"
+                    value={kaufzeitpunktDisplay}
+                    onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
+                    onBlur={commitKaufzeitpunktDisplay}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitKaufzeitpunktDisplay();
+                      }
+                    }}
+                    placeholder={t(language, "datePlaceholder")}
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={t(language, "useNow")}
+                    onClick={() => {
+                      const nowValue = getNowLocalDateTimeValue();
+                      setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
+                      setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
+                    }}
+                  >
+                    <Clock3 size={14} />
+                  </button>
+                </div>
+              </label>
+              <label className="field-span-full calc-right-row">
+                <span className="field-title">{t(language, "differenceEur")}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.verkaufTransaktionManuell}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufTransaktionManuell: e.target.value }))}
+                  placeholder="0,00"
+                />
+              </label>
+              <label className="field-span-full calc-right-row tax-row">
+                <span className="field-title">{t(language, "taxEur")}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.verkaufSteuern}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                  placeholder={Number.isFinite(incomeGrossValue) && incomeGrossValue > 0 ? money(-incomeGrossValue * incomeTaxRate) : "0,00"}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
+        {isTaxCorrectionType && (
+          <div className="card form-card card-span-1 calc-card">
+            <div className="card-title-row">
+              <h3>{t(language, "taxEur")}</h3>
+              <ChartCandlestick size={20} className="card-title-icon" />
+            </div>
+            <div className="form-grid trade-row-grid">
+              <label className="field-span-full">
+                <span className="field-title">{t(language, buyTimeLabelKey)}</span>
+                <div className="date-input-row">
+                  <input
+                    type="text"
+                    value={kaufzeitpunktDisplay}
+                    onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
+                    onBlur={commitKaufzeitpunktDisplay}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitKaufzeitpunktDisplay();
+                      }
+                    }}
+                    placeholder={t(language, "datePlaceholder")}
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={t(language, "useNow")}
+                    onClick={() => {
+                      const nowValue = getNowLocalDateTimeValue();
+                      setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
+                      setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
+                    }}
+                  >
+                    <Clock3 size={14} />
+                  </button>
+                </div>
+              </label>
+              <label className="field-span-full calc-right-row tax-row">
+                <span className="field-title">{t(language, "taxEur")}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.verkaufSteuern}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                  placeholder="0,00"
+                />
+              </label>
+            </div>
+          </div>
+        )}
 
         <div
           className={`card form-card card-span-1 result-card ${gewinn > 0 ? "is-win" : gewinn < 0 ? "is-loss" : "is-neutral"}`}
-          style={{ "--result-tint-strength": `${resultTintStrength}` } as React.CSSProperties}
+          style={
+            {
+              "--result-tint-strength": `${resultTintStrength}`,
+              ...(isCashflowBookingType ? { gridColumn: "3" } : {})
+            } as React.CSSProperties
+          }
         >
           <div className="card-title-row">
             <h3>{t(language, "result")}</h3>
             <HandCoins size={20} className="card-title-icon" />
           </div>
           <div className="form-grid">
-            <label>
-              <span className="field-title">{t(language, "profitEur")}</span>
-              <input value={money(gewinn)} disabled />
-            </label>
-            <label>
-              <span className="field-title">{t(language, "returnPct")}</span>
-              <input value={`${rendite.toFixed(2)}%`} disabled />
-            </label>
-            <label>
-              <span className="field-title">{t(language, "holdDays")}</span>
-              <input value={`${haltedauer}`} disabled />
-            </label>
+            {isTaxCorrectionType ? (
+              <label className="field-span-full calc-right-row">
+                <span className="field-title">{t(language, "taxEur")}</span>
+                <input value={money(steuerBetrag)} disabled />
+              </label>
+            ) : isIncomeType ? (
+              <>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "differenceEur")}</span>
+                  <input value={money(differenz)} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "taxEur")}</span>
+                  <input value={money(steuerBetrag)} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "profitEur")}</span>
+                  <input value={money(gewinn)} disabled />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "differenceEur")}</span>
+                  <input value={money(differenz)} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "taxEur")}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.verkaufSteuern}
+                    onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                    placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
+                  />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "profitEur")}</span>
+                  <input value={money(gewinn)} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "returnPct")}</span>
+                  <input value={`${rendite.toFixed(2)}%`} disabled />
+                </label>
+                <label className="field-span-full calc-right-row">
+                  <span className="field-title">{t(language, "holdDays")}</span>
+                  <input value={`${haltedauer}`} disabled />
+                </label>
+              </>
+            )}
           </div>
         </div>
 

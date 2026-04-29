@@ -250,6 +250,40 @@ export function SettingsView({
           </div>
         </div>
 
+        <div className="card settings-card">
+          <h3>
+            <Wallet size={14} />
+            {t("settingsSectionTradersTitle")}
+          </h3>
+          <p className="muted-help" style={{ marginTop: "0.35rem" }}>
+            {t("settingsTradersLead")}
+          </p>
+          <div className="settings-form-grid">
+            {(["trade-republic", "onvista"] as AppSettings["traderProviders"][number][]).map((providerId) => (
+              <label key={providerId} className="settings-toggle">
+                <span>
+                  <Wallet size={14} />
+                  {providerId === "trade-republic" ? t("traderTradeRepublic") : t("traderOnvista")}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.traderProviders.includes(providerId)}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    const next = enabled
+                      ? Array.from(new Set([...settings.traderProviders, providerId])).filter(Boolean)
+                      : settings.traderProviders.filter((p) => p !== providerId);
+                    update("traderProviders", next as AppSettings["traderProviders"]);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="muted-help" style={{ marginTop: "0.35rem" }}>
+            {t("settingsTradersProvidersLabel")}: {settings.traderProviders.length ? settings.traderProviders.length : "0"}
+          </p>
+        </div>
+
         {onApplyKnownTickerSuggestions && (
           <div className="card settings-card">
             <h3>

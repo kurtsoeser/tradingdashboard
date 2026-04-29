@@ -8,6 +8,7 @@ import { assetToTradingViewSymbol } from "../../lib/tradingViewSymbol";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
 import { EditAssetModal } from "../EditAssetModal";
 import { PageHeader } from "../PageHeader";
+import { buildTraderSearchUrl, getTraderProviderDisplayNameForLanguage, getTraderSearchQueryForAsset, traderProviderShortLabel } from "../../lib/traderLinks";
 
 interface AssetsViewProps {
   language: AppSettings["language"];
@@ -34,6 +35,7 @@ interface AssetsViewProps {
   financeService: AppSettings["financeService"];
   chartTheme: "dark" | "light";
   onSaveAssetMeta: (meta: AssetMeta, renameFrom?: string) => void;
+  traderProviders: AppSettings["traderProviders"];
 }
 
 export function AssetsView({
@@ -55,7 +57,8 @@ export function AssetsView({
   onGoToNewTrade,
   financeService,
   chartTheme,
-  onSaveAssetMeta
+  onSaveAssetMeta,
+  traderProviders
 }: AssetsViewProps) {
   /** Basiswert-Zeile, für die das Live-Chart angezeigt wird (Tabellenklick, erneuter Klick schließt). */
   const [chartAssetName, setChartAssetName] = useState<string | null>(null);
@@ -119,6 +122,81 @@ export function AssetsView({
         return "Google Finance";
     }
   })();
+
+  const renderTraderLinkCell = (asset: AssetDisplayRow) => {
+    const providers = traderProviders;
+    if (!providers.length) return null;
+
+    const query = getTraderSearchQueryForAsset(asset);
+    const primary = providers[0];
+    const primaryUrl = buildTraderSearchUrl(primary, query);
+
+    const openLabel = t(language, "externOpen", { provider: getTraderProviderDisplayNameForLanguage(language, primary) });
+
+    if (providers.length === 1) {
+      return (
+        <a
+          className="secondary slim finance-link-btn icon-only"
+          href={primaryUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={openLabel}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span style={{ fontWeight: 800, fontSize: 12 }}>{traderProviderShortLabel(primary)}</span>
+        </a>
+      );
+    }
+
+    return (
+      <div className="table-actions" onClick={(e) => e.stopPropagation()}>
+        <a
+          className="secondary slim finance-link-btn icon-only"
+          href={primaryUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={openLabel}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span style={{ fontWeight: 800, fontSize: 12 }}>{traderProviderShortLabel(primary)}</span>
+        </a>
+
+        <details className="actions-dropdown">
+          <summary
+            className="secondary finance-link-btn icon-only"
+            style={{ padding: 0, cursor: "pointer" }}
+            title={t(language, "extern")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChevronDown size={14} />
+          </summary>
+          <div className="actions-dropdown-menu">
+            {providers.map((providerId) => {
+              const url = buildTraderSearchUrl(providerId, query);
+              const label = getTraderProviderDisplayNameForLanguage(language, providerId);
+              return (
+                <a
+                  key={providerId}
+                  className="actions-dropdown-item"
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="actions-dropdown-item-content">
+                    <ExternalLink size={14} />
+                    {label}
+                    <span style={{ marginLeft: 6, color: "var(--muted)", fontWeight: 700 }}>{traderProviderShortLabel(providerId)}</span>
+                  </span>
+                  <small style={{ wordBreak: "break-word" }}>{query || "—"}</small>
+                </a>
+              );
+            })}
+          </div>
+        </details>
+      </div>
+    );
+  };
 
   return (
     <section className="section">
@@ -290,6 +368,7 @@ export function AssetsView({
                 {assetSortMarker("openCapital")}
               </th>
               <th className="finance-col">{financeServiceLabel}</th>
+              <th className="trader-col">{t(language, "extern")}</th>
               <th className="action-col">{t(language, "action")}</th>
             </tr>
           </thead>
@@ -325,6 +404,9 @@ export function AssetsView({
                       <ExternalLink size={14} />
                     </a>
                   </td>
+                  <td className="trader-col" onClick={(e) => e.stopPropagation()}>
+                    {renderTraderLinkCell(asset)}
+                  </td>
                   <td className="action-col" onClick={(e) => e.stopPropagation()}>
                     <button type="button" className="icon-btn action edit" title={t(language, "edit")} onClick={() => setEditAsset(asset)}>
                       <Pencil size={13} />
@@ -333,7 +415,7 @@ export function AssetsView({
                 </tr>
                 {chartAssetName === asset.name && (
                   <tr ref={chartExpandRowRef} className="asset-chart-expand-row">
-                    <td colSpan={9}>
+                    <td colSpan={10}>
                       <div className="asset-chart-expand-inner">
                         <h4 className="live-chart-title asset-chart-expand-title">
                           <Activity size={16} aria-hidden />

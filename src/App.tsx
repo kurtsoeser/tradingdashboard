@@ -48,6 +48,62 @@ function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: st
   return c ? `${c}\n\n---\n\n${heading}\n\n${b}` : `${heading}\n\n${b}`;
 }
 
+function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boolean } {
+  let changed = false;
+
+  const next = trades.map((trade) => {
+    let t = trade;
+
+    // Globale Steuer-Cashflow-Konvention:
+    // - Steuerzahlung = negativ
+    // - Steuererstattung/Korrektur = positiv
+    // Für Bestandsdaten: bisherige positive Steuerwerte bei normalen Trades auf negativ drehen.
+    const hasTaxes = t.verkaufSteuern !== undefined && Number.isFinite(t.verkaufSteuern);
+    if (hasTaxes && t.typ !== "Steuerkorrektur" && (t.verkaufSteuern as number) > 0) {
+      t = { ...t, verkaufSteuern: -Math.abs(t.verkaufSteuern as number) };
+      changed = true;
+    }
+
+    if (t.typ !== "Steuerkorrektur") return t;
+
+    // 1) Steuerkorrektur hat nur EINEN Buchungszeitpunkt (kaufzeitpunkt).
+    const sellTime = t.verkaufszeitpunkt?.trim();
+    const buyTime = t.kaufzeitpunkt?.trim();
+    if (sellTime && !buyTime) {
+      t = { ...t, kaufzeitpunkt: sellTime, verkaufszeitpunkt: undefined };
+      changed = true;
+    } else if (buyTime && sellTime) {
+      t = { ...t, verkaufszeitpunkt: undefined };
+      changed = true;
+    }
+
+    // 2) Migration: Steuerkorrektur-Betrag aus "Verkauf/Erlös" ins Feld "Steuern" verschieben.
+    // Ziel: Steuerkorrekturen sollen nicht als Erlös/P&L wirken, sondern ausschließlich als Steuerbetrag.
+    const hasTaxesCorrection = t.verkaufSteuern !== undefined && Number.isFinite(t.verkaufSteuern);
+    const sellAmount = t.verkaufPreis !== undefined && Number.isFinite(t.verkaufPreis) ? t.verkaufPreis : undefined;
+    if (!hasTaxesCorrection && sellAmount !== undefined && sellAmount !== 0) {
+      t = {
+        ...t,
+        // Legacy-Migration: Steuerkorrektur-Betrag aus "Erlös" ins Steuerfeld verschieben.
+        // In der neuen Konvention gilt: + = Erstattung, - = Nachzahlung.
+        verkaufSteuern: sellAmount,
+        // Erlös/Verkauf auf 0 setzen, damit P&L nicht “verzerrt” wird.
+        verkaufPreis: 0,
+        verkaufPreisManuell: undefined,
+        verkaufTransaktionManuell: undefined,
+        verkaufStueckpreis: undefined,
+        stueck: undefined,
+        verkaufszeitpunkt: undefined
+      };
+      changed = true;
+    }
+
+    return t;
+  });
+
+  return { trades: next, changed };
+}
+
 export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -56,7 +112,7 @@ export default function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
   const [view, setView] = useState<View>(() => readStoredAppSettings().defaultStartView as View);
-  const [trades, setTrades] = useState<Trade[]>(() => readInitialTrades());
+  const [trades, setTrades] = useState<Trade[]>(() => normalizeTradesOnLoad(readInitialTrades()).trades);
   const [form, setForm] = useState<NewTradeForm>(() =>
     defaultForm({
       kaufGebuehren: `${readStoredAppSettings().defaultBuyFees ?? defaultAppSettings.defaultBuyFees}`,
@@ -236,6 +292,14 @@ export default function App() {
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
+    // Stelle sicher, dass eventuelle Migrationen auch in localStorage persistiert werden.
+    const normalized = normalizeTradesOnLoad(trades);
+    if (!normalized.changed) return;
+    setTrades(normalized.trades);
+    saveTradesToStorage(normalized.trades);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
     if (!userId) {
       setCloudReady(false);
       return;
@@ -247,8 +311,9 @@ export default function App() {
         const remote = await loadCloudSnapshot(userId);
         if (cancelled) return;
         if (remote) {
-          setTrades(Array.isArray(remote.trades) ? remote.trades : []);
-          saveTradesToStorage(Array.isArray(remote.trades) ? remote.trades : []);
+          const normalizedTrades = normalizeTradesOnLoad(Array.isArray(remote.trades) ? remote.trades : []).trades;
+          setTrades(normalizedTrades);
+          saveTradesToStorage(normalizedTrades);
           setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
           saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
           setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
@@ -913,11 +978,48 @@ export default function App() {
   const verkaufTransaktion =
     form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : stueck > 0 ? stueck * verkaufStueckpreis : 0;
   const steuerpflichtigerGewinn = Math.max(0, verkaufTransaktion - kaufTransaktion);
-  const verkaufSteuern = form.verkaufSteuern.trim() === "" ? steuerpflichtigerGewinn * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
+  const isTaxCorrectionType = form.typ === "Steuerkorrektur";
+  const isInterestType = form.typ === "Zinszahlung";
+  const isDividendType = form.typ === "Dividende";
+  const isIncomeType = isInterestType || isDividendType;
+  const explicitTaxInput = Number.parseFloat(form.verkaufSteuern);
+  const incomeGrossInput = form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : 0;
+  const sellAmountInput =
+    form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)
+      ? verkaufPreisManuell
+      : form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
+      ? verkaufTransaktionManuell
+      : stueck > 0 && verkaufStueckpreis > 0
+      ? verkaufTransaktion
+      : 0;
+  const verkaufSteuern = isTaxCorrectionType
+    ? form.verkaufSteuern.trim() !== ""
+      ? Number.isFinite(explicitTaxInput)
+        ? explicitTaxInput
+        : 0
+      : sellAmountInput
+    : isIncomeType
+    ? form.verkaufSteuern.trim() !== ""
+      ? (() => {
+          const parsed = Number.parseFloat(form.verkaufSteuern);
+          if (!Number.isFinite(parsed)) return 0;
+          return parsed > 0 ? -parsed : parsed;
+        })()
+      : -incomeGrossInput * (isInterestType ? 0.2 : 0.275)
+    : form.verkaufSteuern.trim() === ""
+    ? -steuerpflichtigerGewinn * 0.275
+    : (() => {
+        const parsed = Number.parseFloat(form.verkaufSteuern);
+        if (!Number.isFinite(parsed)) return 0;
+        // Für normale Trades/Dividende/Zins: positive Eingabe als Steuerzahlung interpretieren.
+        return parsed > 0 ? -parsed : parsed;
+      })();
   const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
-  const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufSteuern - verkaufGebuehren : 0;
-  const verkaufPreis = form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
-  const statusClosed = !!form.verkaufszeitpunkt;
+  const verkaufGebuehrenEffective = isIncomeType ? 0 : verkaufGebuehren;
+  const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion + verkaufSteuern - verkaufGebuehrenEffective : 0;
+  const incomeNet = incomeGrossInput + verkaufSteuern;
+  const verkaufPreis = isTaxCorrectionType ? 0 : isIncomeType ? incomeNet : form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
+  const statusClosed = isTaxCorrectionType || isIncomeType ? !!form.kaufzeitpunkt : !!form.verkaufszeitpunkt;
   const isCashflowType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const hasKaufData =
     (form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell)) ||
@@ -927,15 +1029,31 @@ export default function App() {
   const kaufGebuehrenEffective = isCashflowType && !hasKaufData ? 0 : kaufGebuehren;
 
   const gewinn = statusClosed ? verkaufPreis - kaufPreisEffective : 0;
+  const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufTransaktion - kaufTransaktion) : 0;
+  const steuerBetrag = statusClosed ? verkaufSteuern : 0;
   const rendite = kaufPreisEffective > 0 ? (gewinn / kaufPreisEffective) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
 
   const hasVerkaufData =
     (form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)) ||
     (form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)) ||
-    (stueck > 0 && verkaufStueckpreis > 0);
+    (stueck > 0 && verkaufStueckpreis > 0) ||
+    (form.verkaufSteuern.trim() !== "" && Number.isFinite(explicitTaxInput));
 
-  const canSaveTrade = isCashflowType
+  const canSaveTrade = isTaxCorrectionType
+    ? !!form.name.trim() &&
+      !!form.basiswert.trim() &&
+      !!form.kaufzeitpunkt &&
+      form.verkaufSteuern.trim() !== "" &&
+      Number.isFinite(explicitTaxInput)
+    : isIncomeType
+    ? !!form.name.trim() &&
+      !!form.basiswert.trim() &&
+      !!form.kaufzeitpunkt &&
+      form.verkaufTransaktionManuell.trim() !== "" &&
+      Number.isFinite(verkaufTransaktionManuell) &&
+      verkaufTransaktionManuell > 0
+    : isCashflowType
     ? !!form.name.trim() && !!form.basiswert.trim() && !!form.verkaufszeitpunkt && hasVerkaufData
     : !!form.name.trim() &&
       !!form.basiswert.trim() &&
@@ -957,19 +1075,34 @@ export default function App() {
       wkn: form.wkn.trim().toUpperCase() || undefined,
       notiz: form.notiz.trim() || undefined,
       kaufzeitpunkt: toDisplayDateTime(form.kaufzeitpunkt),
-      kaufPreis: kaufPreisEffective,
-      stueck: stueck > 0 ? stueck : undefined,
-      kaufStueckpreis: kaufStueckpreis > 0 ? kaufStueckpreis : undefined,
-      kaufTransaktionManuell: form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : undefined,
-      kaufGebuehren: kaufGebuehrenEffective,
-      kaufPreisManuell: form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : undefined,
-      verkaufszeitpunkt: statusClosed ? toDisplayDateTime(form.verkaufszeitpunkt) : undefined,
+      kaufPreis: isTaxCorrectionType || isIncomeType ? 0 : kaufPreisEffective,
+      stueck: isTaxCorrectionType || isIncomeType ? undefined : stueck > 0 ? stueck : undefined,
+      kaufStueckpreis: isTaxCorrectionType || isIncomeType ? undefined : kaufStueckpreis > 0 ? kaufStueckpreis : undefined,
+      kaufTransaktionManuell:
+        isTaxCorrectionType || isIncomeType ? undefined : form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : undefined,
+      kaufGebuehren: isTaxCorrectionType || isIncomeType ? 0 : kaufGebuehrenEffective,
+      kaufPreisManuell: isTaxCorrectionType || isIncomeType ? undefined : form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : undefined,
+      verkaufszeitpunkt: isTaxCorrectionType || isIncomeType ? undefined : statusClosed ? toDisplayDateTime(form.verkaufszeitpunkt) : undefined,
       verkaufPreis: statusClosed ? verkaufPreis : undefined,
-      verkaufStueckpreis: statusClosed && verkaufStueckpreis > 0 ? verkaufStueckpreis : undefined,
-      verkaufTransaktionManuell: statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : undefined,
+      verkaufStueckpreis: isTaxCorrectionType || isIncomeType ? undefined : statusClosed && verkaufStueckpreis > 0 ? verkaufStueckpreis : undefined,
+      verkaufTransaktionManuell:
+        isTaxCorrectionType
+          ? undefined
+          : isIncomeType
+          ? statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
+            ? verkaufTransaktionManuell
+            : undefined
+          : statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
+          ? verkaufTransaktionManuell
+          : undefined,
       verkaufSteuern: statusClosed ? verkaufSteuern : undefined,
-      verkaufGebuehren: statusClosed ? verkaufGebuehren : undefined,
-      verkaufPreisManuell: statusClosed && form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : undefined,
+      verkaufGebuehren: statusClosed ? verkaufGebuehrenEffective : undefined,
+      verkaufPreisManuell:
+        isTaxCorrectionType || isIncomeType
+          ? undefined
+          : statusClosed && form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)
+          ? verkaufPreisManuell
+          : undefined,
       gewinn: statusClosed ? gewinn : undefined,
       status: statusClosed ? "Geschlossen" : "Offen"
     };
@@ -1399,6 +1532,7 @@ export default function App() {
             onSetSingleDayFilter={setSingleDayFilter}
             calendarWeekdayNames={calendarWeekdayNames}
             language={appSettings.language}
+            traderProviders={appSettings.traderProviders}
           />
         )}
         {view === "newTrade" && (
@@ -1412,6 +1546,8 @@ export default function App() {
             form={form}
             setForm={setForm}
             statusClosed={statusClosed}
+            differenz={differenz}
+            steuerBetrag={steuerBetrag}
             gewinn={gewinn}
             rendite={rendite}
             haltedauer={haltedauer}
@@ -1442,6 +1578,7 @@ export default function App() {
             financeService={appSettings.financeService}
             chartTheme={theme}
             onSaveAssetMeta={saveAssetMetaPatch}
+            traderProviders={appSettings.traderProviders}
           />
         )}
         {view === "journal" && (

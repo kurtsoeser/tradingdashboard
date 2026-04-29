@@ -20,6 +20,9 @@ interface AnalyticsViewProps {
 }
 
 export function AnalyticsView({ language, analyticsData, analyticsTab, onAnalyticsTabChange, trades, onBackToTrades }: AnalyticsViewProps) {
+  // P&L-/PL-Verteilung soll nicht durch Steuerkorrekturen verfälscht werden.
+  const plTrades = trades.filter((t) => isTradeClosed(t) && t.typ !== "Steuerkorrektur");
+
   const plDistributionData = [
     { label: "<-500", min: -Infinity, max: -500 },
     { label: "-500..-200", min: -500, max: -200 },
@@ -31,9 +34,9 @@ export function AnalyticsView({ language, analyticsData, analyticsTab, onAnalyti
     { label: ">500", min: 500, max: Infinity }
   ].map((bucket) => {
     const count = analyticsData.closedCount
-      ? trades.filter((t) => {
+      ? plTrades.filter((t) => {
           const pl = getTradeRealizedPL(t);
-          return isTradeClosed(t) && pl >= bucket.min && pl < bucket.max;
+          return pl >= bucket.min && pl < bucket.max;
         }).length
       : 0;
 
@@ -209,6 +212,17 @@ export function AnalyticsView({ language, analyticsData, analyticsTab, onAnalyti
               <div>
                 <span>{t(language, "sigmaTaxes")}</span>
                 <strong>{money(analyticsData.totalTaxes)}</strong>
+                <div style={{ marginTop: 6, opacity: 0.85, fontSize: 12, lineHeight: 1.25 }}>
+                  <div>
+                    {t(language, "taxesTrading")}: <span style={{ fontWeight: 700 }}>{money(analyticsData.taxesTrading)}</span>
+                  </div>
+                  <div>
+                    {t(language, "taxesWithholding")}: <span style={{ fontWeight: 700 }}>{money(analyticsData.taxesWithholding)}</span>
+                  </div>
+                  <div>
+                    {t(language, "taxesCorrections")}: <span style={{ fontWeight: 700 }}>{money(analyticsData.taxesCorrections)}</span>
+                  </div>
+                </div>
               </div>
               <div>
                 <span>{t(language, "feesToBuyRatio")}</span>
