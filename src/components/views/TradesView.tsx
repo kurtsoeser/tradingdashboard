@@ -367,9 +367,11 @@ export function TradesView(props: TradesViewProps) {
   const copyVisibleTradesToClipboard = async () => {
     const copyColumns = renderedColumns.filter((id) => id !== "action");
     const rows = props.filteredTrades.slice(0, 500);
-    const headerLine = copyColumns.map((id) => getColumnHeader(id)).join("\t");
-    const bodyLines = rows.map((trade) => copyColumns.map((id) => getCellText(id, trade).replace(/\t/g, " ")).join("\t"));
-    const payload = [headerLine, ...bodyLines].join("\n");
+    const toMdCell = (value: string) => value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+    const headerLine = `| ${copyColumns.map((id) => toMdCell(getColumnHeader(id))).join(" | ")} |`;
+    const dividerLine = `| ${copyColumns.map(() => "---").join(" | ")} |`;
+    const bodyLines = rows.map((trade) => `| ${copyColumns.map((id) => toMdCell(getCellText(id, trade))).join(" | ")} |`);
+    const payload = [headerLine, dividerLine, ...bodyLines].join("\n");
     try {
       await navigator.clipboard.writeText(payload);
       setCopyFeedback("ok");
