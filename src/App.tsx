@@ -1022,9 +1022,11 @@ export default function App() {
       })();
   const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
   const verkaufGebuehrenEffective = isIncomeType ? 0 : verkaufGebuehren;
-  const verkaufPreisAutomatisch = stueck > 0 ? verkaufTransaktion + verkaufSteuern - verkaufGebuehrenEffective : 0;
+  const verkaufErlosVorSteuerAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufGebuehrenEffective : 0;
+  const verkaufErlosVorSteuer =
+    form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufErlosVorSteuerAutomatisch;
   const incomeNet = incomeGrossInput + verkaufSteuern;
-  const verkaufPreis = isTaxCorrectionType ? 0 : isIncomeType ? incomeNet : form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufPreisAutomatisch;
+  const verkaufPreis = isTaxCorrectionType ? 0 : isIncomeType ? incomeNet : verkaufErlosVorSteuer + verkaufSteuern;
   const statusClosed = isTaxCorrectionType || isIncomeType ? !!form.kaufzeitpunkt : !!form.verkaufszeitpunkt;
   const isCashflowType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const isNoBasiswertType = form.typ === "Steuerkorrektur" || form.typ === "Zinszahlung";
@@ -1036,7 +1038,7 @@ export default function App() {
   const kaufGebuehrenEffective = isCashflowType && !hasKaufData ? 0 : kaufGebuehren;
 
   const gewinn = statusClosed ? verkaufPreis - kaufPreisEffective : 0;
-  const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufTransaktion - kaufTransaktion) : 0;
+  const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufErlosVorSteuer - kaufPreisEffective) : 0;
   const steuerBetrag = statusClosed ? verkaufSteuern : 0;
   const rendite = kaufPreisEffective > 0 ? (gewinn / kaufPreisEffective) * 100 : 0;
   const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;

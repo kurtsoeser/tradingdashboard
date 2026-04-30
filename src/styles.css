@@ -1636,6 +1636,15 @@ button.dashboard-link-card:hover {
   gap: 6px;
 }
 
+.trades-page th.piece-col,
+.trades-page td.piece-col {
+  width: 46px;
+  max-width: 46px;
+  padding-left: 6px;
+  padding-right: 6px;
+  white-space: nowrap;
+}
+
 .trades-row-open-edit {
   cursor: pointer;
 }

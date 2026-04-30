@@ -182,7 +182,7 @@ export function NewTradeView({
   const kaufPreisManuellValue = Number.parseFloat(form.kaufPreisManuell);
   const kaufPreisEffektiv =
     form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuellValue) ? kaufPreisManuellValue : kaufPreisCalculated;
-  const verkaufserloesCalculated = stueckValue > 0 ? verkaufTransaktionValue - verkaufSteuernValue - verkaufGebuehrenValue : 0;
+  const verkaufserloesCalculated = stueckValue > 0 ? verkaufTransaktionValue - verkaufGebuehrenValue : 0;
   const incomeGrossValue = Number.parseFloat(form.verkaufTransaktionManuell);
   const incomeTaxRate = isInterestType ? 0.2 : isDividendType ? 0.275 : 0;
   const basiswertStats = useMemo(() => {
@@ -358,6 +358,86 @@ export function NewTradeView({
         next.verkaufStueckpreis = (sellTxManual / qty).toFixed(6);
       }
       return next;
+    });
+  };
+
+  const handleDifferenzInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      setForm((prev) => ({ ...prev, verkaufPreisManuell: "" }));
+      return;
+    }
+    const nextSellPrice = kaufPreisEffektiv + parsed;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+  };
+
+  const handleGewinnInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      setForm((prev) => ({ ...prev, verkaufPreisManuell: "" }));
+      return;
+    }
+    const nextSellPrice = kaufPreisEffektiv + parsed - verkaufSteuernValue;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+  };
+
+  const handleRenditeInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed) || kaufPreisEffektiv <= 0) {
+      setForm((prev) => ({ ...prev, verkaufPreisManuell: "" }));
+      return;
+    }
+    const nextGewinn = kaufPreisEffektiv * (parsed / 100);
+    const nextSellPrice = kaufPreisEffektiv + nextGewinn - verkaufSteuernValue;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+  };
+
+  const handleIncomeDifferenzInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
+      return;
+    }
+    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: parsed.toFixed(2) }));
+  };
+
+  const handleIncomeGewinnInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
+      return;
+    }
+    const nextGross = parsed + kaufPreisEffektiv - verkaufSteuernValue;
+    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: nextGross.toFixed(2) }));
+  };
+
+  const handleIncomeRenditeInput = (raw: string) => {
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed) || kaufPreisEffektiv <= 0) {
+      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
+      return;
+    }
+    const nextGewinn = kaufPreisEffektiv * (parsed / 100);
+    const nextGross = nextGewinn + kaufPreisEffektiv - verkaufSteuernValue;
+    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: nextGross.toFixed(2) }));
+  };
+
+  const handleRecalculateResult = () => {
+    setForm((prev) => {
+      if (isTaxCorrectionType) {
+        // Bei Steuerkorrektur existiert nur das Steuerfeld; kein automatischer "Neuaufbau" aus Kauf/Verkauf.
+        return prev;
+      }
+      if (isIncomeType) {
+        // Bei Dividende/Zins bleibt die Bruttobuchung erhalten; Steuer wird auf Auto-Berechnung zurückgesetzt.
+        return { ...prev, verkaufSteuern: "" };
+      }
+      // Normale Trades: Ergebnis wieder vollständig aus Kauf-/Verkaufsdaten ableiten.
+      return {
+        ...prev,
+        verkaufPreisManuell: "",
+        verkaufSteuern: ""
+      };
     });
   };
 
@@ -794,18 +874,33 @@ export function NewTradeView({
           <div className="card-title-row">
             <h3>{t(language, "result")}</h3>
             <HandCoins size={20} className="card-title-icon" />
+            <button type="button" className="secondary slim" onClick={handleRecalculateResult} style={{ marginLeft: "auto" }}>
+              {t(language, "reset")}
+            </button>
           </div>
           <div className="form-grid">
             {isTaxCorrectionType ? (
               <label className="field-span-full calc-right-row">
                 <span className="field-title">{t(language, "taxEur")}</span>
-                <input value={money(steuerBetrag)} disabled />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.verkaufSteuern}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                  placeholder="0,00"
+                />
               </label>
             ) : isIncomeType ? (
               <>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "differenceEur")}</span>
-                  <input value={money(differenz)} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(differenz) ? differenz.toFixed(2) : ""}
+                    onChange={(e) => handleIncomeDifferenzInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "taxEur")}</span>
@@ -820,18 +915,36 @@ export function NewTradeView({
                 <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "profitEur")}</span>
-                  <input value={money(gewinn)} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(gewinn) ? gewinn.toFixed(2) : ""}
+                    onChange={(e) => handleIncomeGewinnInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "returnPct")}</span>
-                  <input value={`${rendite.toFixed(2)}%`} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(rendite) ? rendite.toFixed(2) : ""}
+                    onChange={(e) => handleIncomeRenditeInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
               </>
             ) : (
               <>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "differenceEur")}</span>
-                  <input value={money(differenz)} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(differenz) ? differenz.toFixed(2) : ""}
+                    onChange={(e) => handleDifferenzInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "taxEur")}</span>
@@ -846,11 +959,23 @@ export function NewTradeView({
                 <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "profitEur")}</span>
-                  <input value={money(gewinn)} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(gewinn) ? gewinn.toFixed(2) : ""}
+                    onChange={(e) => handleGewinnInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
                 <label className="field-span-full calc-right-row">
                   <span className="field-title">{t(language, "returnPct")}</span>
-                  <input value={`${rendite.toFixed(2)}%`} disabled />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number.isFinite(rendite) ? rendite.toFixed(2) : ""}
+                    onChange={(e) => handleRenditeInput(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </label>
               </>
             )}

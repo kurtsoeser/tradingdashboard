@@ -76,6 +76,8 @@ export function TradesView(props: TradesViewProps) {
     | "name"
     | "typ"
     | "basiswert"
+    | "kaufStueck"
+    | "verkaufStueck"
     | "extern"
     | "isin"
     | "wkn"
@@ -93,6 +95,8 @@ export function TradesView(props: TradesViewProps) {
     name: true,
     typ: true,
     basiswert: true,
+    kaufStueck: true,
+    verkaufStueck: true,
     extern: true,
     isin: true,
     wkn: true,
@@ -111,6 +115,8 @@ export function TradesView(props: TradesViewProps) {
     "name",
     "typ",
     "basiswert",
+    "kaufStueck",
+    "verkaufStueck",
     "extern",
     "isin",
     "wkn",
@@ -202,6 +208,18 @@ export function TradesView(props: TradesViewProps) {
         label: t(props.language, "basiswert"),
         draggable: true,
         render: (trade: Trade) => trade.basiswert?.trim() ? trade.basiswert : "-"
+      },
+      kaufStueck: {
+        id: "kaufStueck" satisfies ColumnId,
+        label: "K#",
+        draggable: true,
+        render: (trade: Trade) => (trade.stueck !== undefined ? trade.stueck : "-")
+      },
+      verkaufStueck: {
+        id: "verkaufStueck" satisfies ColumnId,
+        label: "V#",
+        draggable: true,
+        render: (trade: Trade) => (isTradeClosed(trade) && trade.stueck !== undefined ? trade.stueck : "-")
       },
       extern: {
         id: "extern" satisfies ColumnId,
@@ -688,7 +706,16 @@ export function TradesView(props: TradesViewProps) {
                 return (
                   <th
                     key={id}
-                    className={sortableField ? "sortable" : id === "extern" ? "trader-col" : undefined}
+                    className={`${sortableField ? "sortable" : ""} ${id === "extern" ? "trader-col" : ""} ${
+                      id === "kaufStueck" || id === "verkaufStueck" ? "piece-col" : ""
+                    }`.trim()}
+                    title={
+                      id === "kaufStueck"
+                        ? `${t(props.language, "buy")} ${t(props.language, "shares")}`
+                        : id === "verkaufStueck"
+                        ? `${t(props.language, "sell")} ${t(props.language, "shares")}`
+                        : undefined
+                    }
                     draggable={canDrag}
                     onDragStart={() => {
                       if (!canDrag) return;
@@ -726,7 +753,7 @@ export function TradesView(props: TradesViewProps) {
             {props.filteredTrades.slice(0, 500).map((trade) => (
               <tr key={trade.id} className="trades-row-open-edit" onClick={() => props.onEditTrade(trade)} title={t(props.language, "edit")}>
                 {renderedColumns.map((id) => (
-                  <td key={id} className={id === "extern" ? "trader-col" : undefined}>
+                  <td key={id} className={`${id === "extern" ? "trader-col" : ""} ${id === "kaufStueck" || id === "verkaufStueck" ? "piece-col" : ""}`.trim()}>
                     {columnDefs[id].render(trade)}
                   </td>
                 ))}
