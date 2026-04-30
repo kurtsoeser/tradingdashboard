@@ -23,12 +23,13 @@ interface TradesViewProps {
   onSearchChange: (value: string) => void;
   statusFilter: "Alle" | Trade["status"];
   onStatusFilterChange: (value: "Alle" | Trade["status"]) => void;
-  typFilter: string;
-  onTypFilterChange: (value: string) => void;
-  basiswertFilter: string;
-  onBasiswertFilterChange: (value: string) => void;
-  rangeFilter: "Alle" | "7" | "30" | "90" | "365";
-  onRangeFilterChange: (value: "Alle" | "7" | "30" | "90" | "365") => void;
+  typFilter: string[];
+  onTypFilterChange: (value: string[]) => void;
+  basiswertFilter: string[];
+  onBasiswertFilterChange: (value: string[]) => void;
+  rangeFilter: "Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365";
+  onRangeFilterChange: (value: "Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365") => void;
+  onResetFilters: () => void;
   availableTypes: string[];
   availableBasiswerte: string[];
   sortMarker: (field: TradesSortField) => string;
@@ -68,7 +69,11 @@ export function TradesView(props: TradesViewProps) {
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
 
   const columnPrefsKey = "trades-columns-v1";
-
+  const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
+    { value: "Alle", label: t(props.language, "all") },
+    { value: "Offen", label: t(props.language, "open") },
+    { value: "Geschlossen", label: t(props.language, "closed") }
+  ];
   type ColumnId =
     | "status"
     | "kaufzeitpunkt"
@@ -565,18 +570,30 @@ export function TradesView(props: TradesViewProps) {
             </label>
           </div>
           <div className="card trades-filters-card trades-filters-card-main">
+            <div className="trades-filters-top-actions">
+              <button type="button" className="secondary slim" onClick={props.onResetFilters}>
+                {t(props.language, "reset")}
+              </button>
+            </div>
             <div className="trades-filters-grid">
               <label>
                 {t(props.language, "status")}
-                <select value={props.statusFilter} onChange={(event) => props.onStatusFilterChange(event.target.value as "Alle" | Trade["status"])}>
-                  <option value="Alle">{t(props.language, "all")}</option>
-                  <option value="Offen">{t(props.language, "open")}</option>
-                  <option value="Geschlossen">{t(props.language, "closed")}</option>
-                </select>
+                <div className="trades-status-switcher" role="tablist" aria-label={t(props.language, "status")}>
+                  {statusOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`trades-status-switch ${props.statusFilter === option.value ? "is-active" : ""}`}
+                      onClick={() => props.onStatusFilterChange(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </label>
               <label>
                 {t(props.language, "type")}
-                <select value={props.typFilter} onChange={(event) => props.onTypFilterChange(event.target.value)}>
+                <select multiple size={6} value={props.typFilter} onChange={(event) => props.onTypFilterChange(Array.from(event.target.selectedOptions, (option) => option.value))}>
                   {props.availableTypes.map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -586,7 +603,12 @@ export function TradesView(props: TradesViewProps) {
               </label>
               <label>
                 {t(props.language, "basiswert")}
-                <select value={props.basiswertFilter} onChange={(event) => props.onBasiswertFilterChange(event.target.value)}>
+                <select
+                  multiple
+                  size={6}
+                  value={props.basiswertFilter}
+                  onChange={(event) => props.onBasiswertFilterChange(Array.from(event.target.selectedOptions, (option) => option.value))}
+                >
                   {props.availableBasiswerte.map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -596,11 +618,13 @@ export function TradesView(props: TradesViewProps) {
               </label>
               <label>
                 {t(props.language, "range")}
-                <select value={props.rangeFilter} onChange={(event) => props.onRangeFilterChange(event.target.value as "Alle" | "7" | "30" | "90" | "365")}>
+                <select value={props.rangeFilter} onChange={(event) => props.onRangeFilterChange(event.target.value as "Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365")}>
                   <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="heute">Heute</option>
                   <option value="7">{t(props.language, "days7")}</option>
                   <option value="30">{t(props.language, "days30")}</option>
-                  <option value="90">{t(props.language, "days90")}</option>
+                  <option value="monat">Aktueller Monat</option>
+                  <option value="jahr">Aktuelles Jahr</option>
                   <option value="365">{t(props.language, "days365")}</option>
                 </select>
               </label>
@@ -665,6 +689,7 @@ export function TradesView(props: TradesViewProps) {
           </div>
         </div>
       </div>
+
 
       <div className="card">
         <div className="table-columns-controls">

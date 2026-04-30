@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, ExternalLink, FileText, HandCoins, Landmark, Save, Search, Tags, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, ExternalLink, FileText, HandCoins, Info, Landmark, Save, Search, Tags, TrendingUp } from "lucide-react";
 import { formatMonthLabel, getNowLocalDateTimeValue, parseStoredDateTime } from "../../app/date";
 import { t } from "../../app/i18n";
 import type { AssetDisplayRow, AssetMeta, NewTradeForm, TradeFormType } from "../../app/types";
@@ -441,6 +441,15 @@ export function NewTradeView({
     });
   };
 
+  const renderResultLabel = (label: string, formulaHint: string) => (
+    <span className="field-title" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      {label}
+      <span title={formulaHint} aria-label={formulaHint} style={{ display: "inline-flex", alignItems: "center", color: "var(--muted)" }}>
+        <Info size={12} />
+      </span>
+    </span>
+  );
+
   return (
     <section className="section new-trade">
       <PageHeader
@@ -881,7 +890,7 @@ export function NewTradeView({
           <div className="form-grid">
             {isTaxCorrectionType ? (
               <label className="field-span-full calc-right-row">
-                <span className="field-title">{t(language, "taxEur")}</span>
+                {renderResultLabel(t(language, "taxEur"), "Steuerbetrag laut Eingabe/Beleg (bei Steuerkorrektur direkt als Wert gespeichert).")}
                 <input
                   type="number"
                   step="0.01"
@@ -893,7 +902,7 @@ export function NewTradeView({
             ) : isIncomeType ? (
               <>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "differenceEur")}</span>
+                  {renderResultLabel(t(language, "differenceEur"), "Differenz = Bruttobetrag (Buchung) aus den Verkaufsdaten.")}
                   <input
                     type="number"
                     step="0.01"
@@ -903,7 +912,7 @@ export function NewTradeView({
                   />
                 </label>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "taxEur")}</span>
+                  {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung mit Standard-Steuersatz.")}
                   <input
                     type="number"
                     step="0.01"
@@ -914,7 +923,7 @@ export function NewTradeView({
                 </label>
                 <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "profitEur")}</span>
+                  {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer - Kaufpreis.")}
                   <input
                     type="number"
                     step="0.01"
@@ -924,7 +933,7 @@ export function NewTradeView({
                   />
                 </label>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "returnPct")}</span>
+                  {renderResultLabel(t(language, "returnPct"), "Rendite (%) = Gewinn / Kaufpreis × 100.")}
                   <input
                     type="number"
                     step="0.01"
@@ -937,7 +946,7 @@ export function NewTradeView({
             ) : (
               <>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "differenceEur")}</span>
+                  {renderResultLabel(t(language, "differenceEur"), "Differenz = Verkaufserlös vor Steuer - Kaufpreis.")}
                   <input
                     type="number"
                     step="0.01"
@@ -947,7 +956,7 @@ export function NewTradeView({
                   />
                 </label>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "taxEur")}</span>
+                  {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung aus (Verkaufstransaktion - Kauftransaktion) × Steuersatz.")}
                   <input
                     type="number"
                     step="0.01"
@@ -958,7 +967,7 @@ export function NewTradeView({
                 </label>
                 <div className="calc-separator field-span-full" aria-hidden="true" />
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "profitEur")}</span>
+                  {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer.")}
                   <input
                     type="number"
                     step="0.01"
@@ -968,7 +977,7 @@ export function NewTradeView({
                   />
                 </label>
                 <label className="field-span-full calc-right-row">
-                  <span className="field-title">{t(language, "returnPct")}</span>
+                  {renderResultLabel(t(language, "returnPct"), "Rendite (%) = Gewinn / Kaufpreis × 100.")}
                   <input
                     type="number"
                     step="0.01"

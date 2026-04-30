@@ -130,9 +130,9 @@ export default function App() {
   const newTradeDraftIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
-  const [typFilter, setTypFilter] = useState<"Alle" | string>("Alle");
-  const [basiswertFilter, setBasiswertFilter] = useState<"Alle" | string>("Alle");
-  const [rangeFilter, setRangeFilter] = useState<"Alle" | "7" | "30" | "90" | "365">("Alle");
+  const [typFilter, setTypFilter] = useState<string[]>([]);
+  const [basiswertFilter, setBasiswertFilter] = useState<string[]>([]);
+  const [rangeFilter, setRangeFilter] = useState<"Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365">("Alle");
   const [sortField, setSortField] = useState<TradesSortField>("kauf");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
@@ -394,16 +394,16 @@ export default function App() {
   const dashboardMonthlyStats = useMemo(() => buildDashboardMonthlyStats(trades), [trades]);
   const dashboardTopFlop = useMemo(() => buildDashboardTopFlop(trades), [trades]);
   const analyticsData = useMemo(() => buildAnalyticsData(trades), [trades]);
-  const availableTypes = useMemo(() => ["Alle", ...new Set(trades.map((trade) => trade.typ).filter(Boolean))], [trades]);
-  const availableBasiswerte = useMemo(() => ["Alle", ...new Set(trades.map((trade) => trade.basiswert).filter(Boolean))], [trades]);
+  const availableTypes = useMemo(() => [...new Set(trades.map((trade) => trade.typ).filter(Boolean))], [trades]);
+  const availableBasiswerte = useMemo(() => [...new Set(trades.map((trade) => trade.basiswert).filter(Boolean))], [trades]);
 
   const baseFilteredTrades = useMemo(() => {
     const searchNormalized = search.trim().toLowerCase();
     return trades.filter((trade) => {
       const matchesSearch = !searchNormalized || trade.name.toLowerCase().includes(searchNormalized) || trade.basiswert.toLowerCase().includes(searchNormalized);
       const matchesStatus = statusFilter === "Alle" || trade.status === statusFilter;
-      const matchesTyp = typFilter === "Alle" || trade.typ === typFilter;
-      const matchesBasiswert = basiswertFilter === "Alle" || trade.basiswert === basiswertFilter;
+      const matchesTyp = typFilter.length === 0 || typFilter.includes(trade.typ);
+      const matchesBasiswert = basiswertFilter.length === 0 || basiswertFilter.includes(trade.basiswert);
       return matchesSearch && matchesStatus && matchesTyp && matchesBasiswert;
     });
   }, [trades, search, statusFilter, typFilter, basiswertFilter]);
@@ -432,6 +432,9 @@ export default function App() {
 
   const filteredTrades = useMemo(() => {
     const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
     const dateRangeStart = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart < calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeStart;
     const dateRangeEnd = calendarRangeStart && calendarRangeEnd ? (calendarRangeStart > calendarRangeEnd ? calendarRangeStart : calendarRangeEnd) : calendarRangeEnd;
     const base = baseFilteredTrades.filter((trade) => {
@@ -439,7 +442,12 @@ export default function App() {
       const tradeDateKeys = getTradeDateKeys(trade);
       const matchesRange =
         rangeFilter === "Alle" ||
-        tradeDateTimes.some((tradeDate) => now.getTime() - tradeDate.getTime() <= Number.parseInt(rangeFilter, 10) * 24 * 60 * 60 * 1000);
+        (rangeFilter === "heute" && tradeDateTimes.some((tradeDate) => tradeDate >= startOfToday)) ||
+        (rangeFilter === "monat" && tradeDateTimes.some((tradeDate) => tradeDate >= startOfMonth)) ||
+        (rangeFilter === "jahr" && tradeDateTimes.some((tradeDate) => tradeDate >= startOfYear)) ||
+        (rangeFilter === "7" && tradeDateTimes.some((tradeDate) => now.getTime() - tradeDate.getTime() <= 7 * 24 * 60 * 60 * 1000)) ||
+        (rangeFilter === "30" && tradeDateTimes.some((tradeDate) => now.getTime() - tradeDate.getTime() <= 30 * 24 * 60 * 60 * 1000)) ||
+        (rangeFilter === "365" && tradeDateTimes.some((tradeDate) => now.getTime() - tradeDate.getTime() <= 365 * 24 * 60 * 60 * 1000));
       if (!matchesRange) return false;
       if (!dateRangeStart || !dateRangeEnd) return true;
       if (tradeDateKeys.length === 0) return false;
@@ -1348,6 +1356,15 @@ export default function App() {
     setCalendarRangeStart(null);
     setCalendarRangeEnd(null);
   };
+  const resetTradesFilters = () => {
+    setSearch("");
+    setStatusFilter("Alle");
+    setTypFilter([]);
+    setBasiswertFilter([]);
+    setRangeFilter("Alle");
+    setCalendarRangeStart(null);
+    setCalendarRangeEnd(null);
+  };
 
   const handleAuthSubmit = async () => {
     if (!supabase) return;
@@ -1509,6 +1526,7 @@ export default function App() {
               setCalendarRangeStart(null);
               setCalendarRangeEnd(null);
             }}
+            onResetFilters={resetTradesFilters}
             availableTypes={availableTypes}
             availableBasiswerte={availableBasiswerte}
             sortMarker={sortMarker}
