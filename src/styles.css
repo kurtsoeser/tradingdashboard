@@ -1841,6 +1841,14 @@ button.dashboard-link-card:hover {
   margin-bottom: 16px;
 }
 
+.table-columns-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .trades-summary-grid-spaced {
   margin-top: 0;
   margin-bottom: 16px;

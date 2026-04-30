@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, ExternalLink, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, Copy, ExternalLink, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
@@ -67,6 +67,7 @@ interface TradesViewProps {
 export function TradesView(props: TradesViewProps) {
   const toDateKey = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
+  const [copyFeedback, setCopyFeedback] = useState<"idle" | "ok" | "error">("idle");
 
   const columnPrefsKey = "trades-columns-v1";
   const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
@@ -313,6 +314,70 @@ export function TradesView(props: TradesViewProps) {
   })();
 
   const renderedColumns = useMemo(() => columnOrder.filter((id) => visibleById[id]), [columnOrder, visibleById]);
+
+  const getColumnHeader = (id: ColumnId) => {
+    if (id === "status") return t(props.language, "status");
+    return columnDefs[id].label || id;
+  };
+
+  const getCellText = (id: ColumnId, trade: Trade): string => {
+    switch (id) {
+      case "status":
+        return isTradeClosed(trade) ? t(props.language, "closed") : t(props.language, "open");
+      case "kaufzeitpunkt":
+        return formatDateTimeAT(trade.kaufzeitpunkt);
+      case "verkaufszeitpunkt":
+        return formatDateTimeAT(["Steuerkorrektur", "Dividende", "Zinszahlung"].includes(trade.typ) ? trade.kaufzeitpunkt : trade.verkaufszeitpunkt);
+      case "name":
+        return trade.name;
+      case "typ":
+        return trade.typ;
+      case "basiswert":
+        return trade.basiswert?.trim() ? trade.basiswert : "-";
+      case "kaufStueck":
+        return trade.stueck !== undefined ? `${trade.stueck}` : "-";
+      case "verkaufStueck":
+        return isTradeClosed(trade) && trade.stueck !== undefined ? `${trade.stueck}` : "-";
+      case "extern":
+        return getTraderSearchQueryForTrade(trade) || "-";
+      case "isin":
+        return trade.isin || "-";
+      case "wkn":
+        return trade.wkn || "-";
+      case "kaufPreis":
+        return money(trade.kaufPreis);
+      case "verkaufPreis":
+        return trade.verkaufPreis ? money(trade.verkaufPreis) : "-";
+      case "tradeTaxes":
+        return trade.verkaufSteuern !== undefined ? money(trade.verkaufSteuern) : "-";
+      case "gewinn":
+        return trade.typ === "Steuerkorrektur" ? "-" : money(getTradeRealizedPL(trade));
+      case "rendite":
+        if (trade.typ === "Steuerkorrektur") return "-";
+        if (trade.kaufPreis > 0 && isTradeClosed(trade)) {
+          const v = (getTradeRealizedPL(trade) / trade.kaufPreis) * 100;
+          return `${v.toFixed(1)}%`;
+        }
+        return "-";
+      default:
+        return "";
+    }
+  };
+
+  const copyVisibleTradesToClipboard = async () => {
+    const copyColumns = renderedColumns.filter((id) => id !== "action");
+    const rows = props.filteredTrades.slice(0, 500);
+    const headerLine = copyColumns.map((id) => getColumnHeader(id)).join("\t");
+    const bodyLines = rows.map((trade) => copyColumns.map((id) => getCellText(id, trade).replace(/\t/g, " ")).join("\t"));
+    const payload = [headerLine, ...bodyLines].join("\n");
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopyFeedback("ok");
+    } catch {
+      setCopyFeedback("error");
+    }
+    window.setTimeout(() => setCopyFeedback("idle"), 1800);
+  };
 
   const reorderVisibleColumns = (from: ColumnId, to: ColumnId) => {
     if (from === to) return;
@@ -693,6 +758,10 @@ export function TradesView(props: TradesViewProps) {
 
       <div className="card">
         <div className="table-columns-controls">
+          <button className="secondary slim" onClick={() => void copyVisibleTradesToClipboard()}>
+            <Copy size={14} />
+            {copyFeedback === "ok" ? "Kopiert" : copyFeedback === "error" ? "Fehler" : "Kopieren"}
+          </button>
           <details className="actions-dropdown">
             <summary className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <Layers size={14} />
