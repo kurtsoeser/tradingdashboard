@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, ExternalLink, FileText, HandCoins, Info, Landmark, Save, Search, Tags, TrendingUp } from "lucide-react";
-import { formatMonthLabel, getNowLocalDateTimeValue, parseStoredDateTime } from "../../app/date";
+import { Activity, BarChart3, CandlestickChart, ChartCandlestick, Clock3, ExternalLink, FileText, HandCoins, Info, Landmark, Layers, Save, Search, Tags, TrendingUp } from "lucide-react";
+import {
+  formatDateTimeAT,
+  formatMonthLabel,
+  getNowLocalDateTimeValue,
+  parseStoredDateTime
+} from "../../app/date";
 import { t } from "../../app/i18n";
 import type { AssetDisplayRow, AssetMeta, NewTradeForm, TradeFormType } from "../../app/types";
 import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
@@ -11,12 +16,23 @@ import { searchByIsinOpenFigi, tradingViewSymbolFromOpenFigiHit } from "../../li
 import { resolvePlainTickerForTradingView } from "../../data/tickerTradingViewAliases";
 import type { AppSettings } from "../../app/settings";
 import { buildFinanceSearchUrl } from "../../lib/financeLinks";
-import type { Trade } from "../../types/trade";
+import type { Trade, TradePositionBooking, TradePositionBookingKind } from "../../types/trade";
+import { emptyBookingRow, tradeFormAggregatesFromBookings } from "../../lib/bookingsDraft";
+import { formatDecimalForForm, parseLocaleDecimal } from "../../lib/numberLocale";
 import { PageHeader } from "../PageHeader";
+import { ErtragEingabeEditor } from "./ErtragEingabeEditor";
+import { SteuerkorrekturEditor } from "./SteuerkorrekturEditor";
 import { TradingViewLiveChart } from "../TradingViewLiveChart";
 
 function isDerivativeTradeTyp(typ: string): boolean {
   return typ === "Long" || typ === "Short" || typ === "Derivat";
+}
+
+function bookingKindLabel(language: AppSettings["language"], kind: TradePositionBookingKind): string {
+  if (kind === "BUY") return t(language, "buy");
+  if (kind === "SELL") return t(language, "sell");
+  if (kind === "INCOME") return t(language, "incomeBooking");
+  return t(language, "cloudBookingKindTaxCorr");
 }
 
 function financeProviderLabel(language: AppSettings["language"], service: AppSettings["financeService"]): string {
@@ -52,6 +68,8 @@ interface NewTradeViewProps {
   onSaveNewTrade: () => void;
   onSetViewTrades: () => void;
   onCancelNewTradeView: () => void;
+  bookingDraft: TradePositionBooking[];
+  onBookingDraftChange: (rows: TradePositionBooking[]) => void;
 }
 
 export function NewTradeView({
@@ -72,7 +90,9 @@ export function NewTradeView({
   canSaveTrade,
   onSaveNewTrade,
   onSetViewTrades,
-  onCancelNewTradeView
+  onCancelNewTradeView,
+  bookingDraft,
+  onBookingDraftChange
 }: NewTradeViewProps) {
   const formatDateTimeDisplay = (value: string) => {
     if (!value) return "";
@@ -111,6 +131,8 @@ export function NewTradeView({
   const [verkaufszeitpunktDisplay, setVerkaufszeitpunktDisplay] = useState(() => formatDateTimeDisplay(form.verkaufszeitpunkt));
   const [isinLookupState, setIsinLookupState] = useState<"idle" | "loading" | "ok" | "empty" | "error">("idle");
   const [isinLiveSymbol, setIsinLiveSymbol] = useState<string | null>(null);
+  /** Steuer-Spalte: Text + Locale-Parsing (type=number blockiert oft „,“ / Zwischenstände). */
+  const [bookingTaxFocus, setBookingTaxFocus] = useState<{ idx: number; draft: string } | null>(null);
 
   const isTaxCorrectionType = form.typ === "Steuerkorrektur";
   const isInterestType = form.typ === "Zinszahlung";
@@ -118,8 +140,13 @@ export function NewTradeView({
   const isIncomeType = isInterestType || isDividendType;
   const isNoBasiswertType = isTaxCorrectionType || isInterestType;
   const isCashflowBookingType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
+  const numberLocale = language === "en" ? "en" : "de";
+  const showBookingEditor =
+    !!editingTradeId && form.typ !== "Dividende" && form.typ !== "Zinszahlung" && form.typ !== "Steuerkorrektur";
+  useEffect(() => {
+    setBookingTaxFocus((prev) => (prev && prev.idx >= bookingDraft.length ? null : prev));
+  }, [bookingDraft.length]);
   const buyTimeLabelKey = isCashflowBookingType ? "bookingDate" : "buyTime";
-  const disableBuyDataForCashflowTypes = isIncomeType;
   const normalizedIsin = form.isin.trim().toUpperCase();
   const isValidIsin = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalizedIsin);
   const derivativeLiveQueriesChart = isDerivativeTradeTyp(form.typ);
@@ -144,6 +171,37 @@ export function NewTradeView({
     setVerkaufszeitpunktDisplay(formatDateTimeDisplay(form.verkaufszeitpunkt));
   }, [form.verkaufszeitpunkt]);
 
+  /**
+   * Kaufdaten / Verkaufs-Kachel aus Buchungszeilen (Bearbeitung, keine Cashflow-Typen).
+   * Verkaufszeitpunkt = spätestes SELL-`bookedAt` (wie in `tradeFormAggregatesFromBookings`).
+   */
+  useEffect(() => {
+    if (!showBookingEditor || !editingTradeId || !bookingDraft.length) return;
+    if (isTaxCorrectionType || isIncomeType) return;
+    const { buy, sell } = tradeFormAggregatesFromBookings(bookingDraft);
+    setForm((prev) => ({
+      ...prev,
+      ...(buy ?? {}),
+      ...(sell
+        ? {
+            stueckVerkauf: sell.stueckVerkauf,
+            verkaufszeitpunkt: sell.verkaufszeitpunkt,
+            verkaufStueckpreis: sell.verkaufStueckpreis,
+            verkaufTransaktionManuell: sell.verkaufTransaktionManuell,
+            verkaufGebuehren: sell.verkaufGebuehren,
+            verkaufPreisManuell: sell.verkaufPreisManuell
+          }
+        : { stueckVerkauf: "" })
+    }));
+  }, [
+    bookingDraft,
+    editingTradeId,
+    isIncomeType,
+    isTaxCorrectionType,
+    showBookingEditor,
+    setForm
+  ]);
+
   const commitKaufzeitpunktDisplay = () => {
     const parsed = parseDateTimeDisplay(kaufzeitpunktDisplay);
     if (!parsed) {
@@ -160,12 +218,16 @@ export function NewTradeView({
       setVerkaufszeitpunktDisplay(formatDateTimeDisplay(form.verkaufszeitpunkt));
       return;
     }
-    setForm((prev) => ({ ...prev, verkaufszeitpunkt: parsed }));
+    setForm((prev) => ({ ...prev, verkaufszeitpunkt: parsed, tradeStatus: "Geschlossen" }));
     setVerkaufszeitpunktDisplay(formatDateTimeDisplay(parsed));
   };
 
   const resultTintStrength = Math.min(Math.abs(rendite), 30) / 30;
   const stueckValue = Number.parseFloat(form.stueck) || 0;
+  const verkaufStueckParsed = Number.parseFloat(form.stueckVerkauf);
+  /** Verkaufs-Stückzahl: explizit aus Formular, sonst (neuer Trade) = Kauf-Stückzahl. */
+  const verkaufStueckCount =
+    form.stueckVerkauf.trim() !== "" && Number.isFinite(verkaufStueckParsed) ? verkaufStueckParsed || 0 : stueckValue;
   const kaufStueckpreisValue = Number.parseFloat(form.kaufStueckpreis) || 0;
   const kaufTransaktionManuellValue = Number.parseFloat(form.kaufTransaktionManuell);
   const kaufGebuehrenValue = Number.parseFloat(form.kaufGebuehren) || 0;
@@ -174,17 +236,23 @@ export function NewTradeView({
   const kaufTransaktionValue =
     form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuellValue) ? kaufTransaktionManuellValue : stueckValue > 0 ? stueckValue * kaufStueckpreisValue : 0;
   const verkaufTransaktionValue =
-    form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuellValue) ? verkaufTransaktionManuellValue : stueckValue > 0 ? stueckValue * verkaufStueckpreisValue : 0;
+    form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuellValue)
+      ? verkaufTransaktionManuellValue
+      : verkaufStueckCount > 0
+        ? verkaufStueckCount * verkaufStueckpreisValue
+        : 0;
   const steuerpflichtigerGewinnValue = Math.max(0, verkaufTransaktionValue - kaufTransaktionValue);
-  const verkaufSteuernValue = form.verkaufSteuern.trim() === "" ? steuerpflichtigerGewinnValue * 0.275 : Number.parseFloat(form.verkaufSteuern) || 0;
+  const verkaufSteuernFormStr = String(form.verkaufSteuern ?? "").trim();
+  const verkaufSteuernValue =
+    verkaufSteuernFormStr === ""
+      ? steuerpflichtigerGewinnValue * 0.275
+      : (parseLocaleDecimal(verkaufSteuernFormStr, numberLocale) ?? Number.parseFloat(verkaufSteuernFormStr)) || 0;
   const verkaufGebuehrenValue = Number.parseFloat(form.verkaufGebuehren) || 0;
   const kaufPreisCalculated = stueckValue > 0 ? kaufTransaktionValue + kaufGebuehrenValue : 0;
   const kaufPreisManuellValue = Number.parseFloat(form.kaufPreisManuell);
   const kaufPreisEffektiv =
     form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuellValue) ? kaufPreisManuellValue : kaufPreisCalculated;
-  const verkaufserloesCalculated = stueckValue > 0 ? verkaufTransaktionValue - verkaufGebuehrenValue : 0;
-  const incomeGrossValue = Number.parseFloat(form.verkaufTransaktionManuell);
-  const incomeTaxRate = isInterestType ? 0.2 : isDividendType ? 0.275 : 0;
+  const verkaufserloesCalculated = verkaufStueckCount > 0 ? verkaufTransaktionValue - verkaufGebuehrenValue : 0;
   const basiswertStats = useMemo(() => {
     const normalizedBasiswert = form.basiswert.trim().toLowerCase();
     if (!normalizedBasiswert) return null;
@@ -349,13 +417,30 @@ export function NewTradeView({
     setForm((prev) => {
       const qty = Number.parseFloat(nextStueck) || 0;
       const next: NewTradeForm = { ...prev, stueck: nextStueck };
+      if (!showBookingEditor) {
+        next.stueckVerkauf = nextStueck;
+      }
       const buyTxManual = Number.parseFloat(prev.kaufTransaktionManuell);
       if (prev.kaufTransaktionManuell.trim() !== "" && Number.isFinite(buyTxManual) && qty > 0) {
         next.kaufStueckpreis = (buyTxManual / qty).toFixed(6);
       }
       const sellTxManual = Number.parseFloat(prev.verkaufTransaktionManuell);
-      if (prev.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(sellTxManual) && qty > 0) {
-        next.verkaufStueckpreis = (sellTxManual / qty).toFixed(6);
+      const sellQtyForPreis = showBookingEditor ? Number.parseFloat(prev.stueckVerkauf) || 0 : qty;
+      if (prev.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(sellTxManual) && sellQtyForPreis > 0) {
+        next.verkaufStueckpreis = (sellTxManual / sellQtyForPreis).toFixed(6);
+      }
+      return next;
+    });
+  };
+
+  const handleVerkaufStueckChange = (nextVerkaufStueck: string) => {
+    if (showBookingEditor) return;
+    setForm((prev) => {
+      const qv = Number.parseFloat(nextVerkaufStueck) || 0;
+      const next: NewTradeForm = { ...prev, stueckVerkauf: nextVerkaufStueck };
+      const sellTxManual = Number.parseFloat(prev.verkaufTransaktionManuell);
+      if (prev.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(sellTxManual) && qv > 0) {
+        next.verkaufStueckpreis = (sellTxManual / qv).toFixed(6);
       }
       return next;
     });
@@ -392,36 +477,6 @@ export function NewTradeView({
     setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
   };
 
-  const handleIncomeDifferenzInput = (raw: string) => {
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) {
-      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
-      return;
-    }
-    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: parsed.toFixed(2) }));
-  };
-
-  const handleIncomeGewinnInput = (raw: string) => {
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) {
-      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
-      return;
-    }
-    const nextGross = parsed + kaufPreisEffektiv - verkaufSteuernValue;
-    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: nextGross.toFixed(2) }));
-  };
-
-  const handleIncomeRenditeInput = (raw: string) => {
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed) || kaufPreisEffektiv <= 0) {
-      setForm((prev) => ({ ...prev, verkaufTransaktionManuell: "" }));
-      return;
-    }
-    const nextGewinn = kaufPreisEffektiv * (parsed / 100);
-    const nextGross = nextGewinn + kaufPreisEffektiv - verkaufSteuernValue;
-    setForm((prev) => ({ ...prev, verkaufTransaktionManuell: nextGross.toFixed(2) }));
-  };
-
   const handleRecalculateResult = () => {
     setForm((prev) => {
       if (isTaxCorrectionType) {
@@ -453,8 +508,28 @@ export function NewTradeView({
   return (
     <section className="section new-trade">
       <PageHeader
-        title={editingTradeId ? t(language, "editTradeTitle") : t(language, "newTradeTitle")}
-        subtitle={editingTradeId ? t(language, "editTradeSubtitle") : t(language, "newTradeSubtitle")}
+        title={
+          isTaxCorrectionType
+            ? t(language, "taxCorrectionPageTitle")
+            : isDividendType
+              ? t(language, "dividendPageTitle")
+              : isInterestType
+                ? t(language, "interestPageTitle")
+                : editingTradeId
+                  ? t(language, "editTradeTitle")
+                  : t(language, "newTradeTitle")
+        }
+        subtitle={
+          isTaxCorrectionType
+            ? t(language, "taxCorrectionPageSubtitle")
+            : isDividendType
+              ? t(language, "dividendPageSubtitle")
+              : isInterestType
+                ? t(language, "interestPageSubtitle")
+                : editingTradeId
+                  ? t(language, "editTradeSubtitle")
+                  : t(language, "newTradeSubtitle")
+        }
         actions={
           <>
             <button className="secondary" type="button" onClick={onSetViewTrades}>
@@ -469,6 +544,47 @@ export function NewTradeView({
         }
       />
 
+      {isTaxCorrectionType ? (
+        <>
+          <SteuerkorrekturEditor
+            language={language}
+            form={form}
+            setForm={setForm}
+            kaufzeitpunktDisplay={kaufzeitpunktDisplay}
+            setKaufzeitpunktDisplay={setKaufzeitpunktDisplay}
+            commitKaufzeitpunktDisplay={commitKaufzeitpunktDisplay}
+          />
+          <div className="new-trade-actions">
+            <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
+              {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
+            </button>
+            <button className="secondary" type="button" onClick={onCancelNewTradeView}>
+              {t(language, "cancel")}
+            </button>
+          </div>
+        </>
+      ) : isIncomeType ? (
+        <>
+          <ErtragEingabeEditor
+            language={language}
+            variant={isDividendType ? "Dividende" : "Zinszahlung"}
+            form={form}
+            setForm={setForm}
+            kaufzeitpunktDisplay={kaufzeitpunktDisplay}
+            setKaufzeitpunktDisplay={setKaufzeitpunktDisplay}
+            commitKaufzeitpunktDisplay={commitKaufzeitpunktDisplay}
+          />
+          <div className="new-trade-actions">
+            <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
+              {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
+            </button>
+            <button className="secondary" type="button" onClick={onCancelNewTradeView}>
+              {t(language, "cancel")}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
       <div className="new-trade-grid">
         <div className="card form-card card-span-2">
           <div className="card-title-row">
@@ -546,14 +662,281 @@ export function NewTradeView({
           </label>
         </div>
 
+        {showBookingEditor && bookingDraft.length > 0 && (
+          <div className="card form-card card-span-3 trade-cloud-bookings-card">
+            <div className="card-title-row">
+              <h3>{t(language, "cloudBookingsTitle")}</h3>
+              <Layers size={20} className="card-title-icon" />
+            </div>
+            <p className="muted trade-cloud-bookings-hint">{t(language, "cloudBookingsHint")}</p>
+            <div className="journal-week-table-wrap">
+              <table className="journal-week-table trade-cloud-bookings-table">
+                <thead>
+                  <tr>
+                    <th>{t(language, "booking")}</th>
+                    <th>{t(language, "dateTime")}</th>
+                    {!isTaxCorrectionType && <th>{t(language, "shares")}</th>}
+                    {!isTaxCorrectionType && <th>{t(language, "cloudBookingsColUnit")}</th>}
+                    {!isTaxCorrectionType && <th>{t(language, "cloudBookingsColGross")}</th>}
+                    {!isTaxCorrectionType && <th>{t(language, "cloudBookingsColFees")}</th>}
+                    <th>{t(language, "taxEur")}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookingDraft.map((b, idx) => {
+                    const buyCount = bookingDraft.filter((r) => r.kind === "BUY").length;
+                    const sellCount = bookingDraft.filter((r) => r.kind === "SELL").length;
+                    const taxCount = bookingDraft.filter((r) => r.kind === "TAX_CORRECTION").length;
+                    const incomeCount = bookingDraft.filter((r) => r.kind === "INCOME").length;
+                    const canRemove =
+                      (b.kind === "BUY" && buyCount > 1) ||
+                      (b.kind === "SELL" && (!statusClosed || sellCount > 1)) ||
+                      (b.kind === "TAX_CORRECTION" && taxCount > 1) ||
+                      (b.kind === "INCOME" && incomeCount > 1);
+                    const rowKey = b.transactionId || `${b.legacyLeg ?? b.kind}-${idx}`;
+                    return (
+                      <tr key={rowKey}>
+                        <td>{bookingKindLabel(language, b.kind)}</td>
+                        <td>
+                          <div className="date-input-row booking-dt-row">
+                            <input
+                              type="text"
+                              className="booking-datetime-input"
+                              value={b.bookedAtDisplay?.trim() ? b.bookedAtDisplay : b.bookedAtIso ? formatDateTimeAT(b.bookedAtIso) : ""}
+                              onChange={(e) =>
+                                onBookingDraftChange(
+                                  bookingDraft.map((row, i) =>
+                                    i === idx ? { ...row, bookedAtDisplay: e.target.value } : row
+                                  )
+                                )
+                              }
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                onBookingDraftChange(
+                                  bookingDraft.map((row, i) => {
+                                    if (i !== idx) return row;
+                                    if (!raw) {
+                                      return {
+                                        ...row,
+                                        bookedAtDisplay: row.bookedAtIso ? formatDateTimeAT(row.bookedAtIso) || "" : ""
+                                      };
+                                    }
+                                    const parsed = parseDateTimeDisplay(raw.replace(/\s+-\s+/g, " "));
+                                    if (!parsed) {
+                                      return {
+                                        ...row,
+                                        bookedAtDisplay: row.bookedAtIso ? formatDateTimeAT(row.bookedAtIso) || "" : ""
+                                      };
+                                    }
+                                    const iso = new Date(parsed).toISOString();
+                                    return {
+                                      ...row,
+                                      bookedAtIso: iso,
+                                      bookedAtDisplay: formatDateTimeAT(iso) || raw
+                                    };
+                                  })
+                                );
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              placeholder={t(language, "datePlaceholder")}
+                            />
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title={t(language, "useNow")}
+                              onClick={() => {
+                                const nowValue = getNowLocalDateTimeValue();
+                                const iso = new Date(nowValue).toISOString();
+                                onBookingDraftChange(
+                                  bookingDraft.map((row, i) =>
+                                    i === idx
+                                      ? {
+                                          ...row,
+                                          bookedAtIso: iso,
+                                          bookedAtDisplay: formatDateTimeAT(iso) || formatDateTimeDisplay(nowValue)
+                                        }
+                                      : row
+                                  )
+                                );
+                              }}
+                            >
+                              <Clock3 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                        {!isTaxCorrectionType && (
+                          <>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                className="booking-num-input"
+                                value={b.qty ?? ""}
+                                onChange={(e) => {
+                                  const n = Number.parseFloat(e.target.value);
+                                  const qty = Number.isFinite(n) ? n : undefined;
+                                  const unit = b.unitPrice ?? 0;
+                                  const gross =
+                                    qty !== undefined && Number.isFinite(unit) ? Math.round(qty * unit * 100) / 100 : 0;
+                                  onBookingDraftChange(
+                                    bookingDraft.map((row, i) =>
+                                      i === idx ? { ...row, qty, grossAmount: gross } : row
+                                    )
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="any"
+                                className="booking-num-input"
+                                value={b.unitPrice ?? ""}
+                                onChange={(e) => {
+                                  const n = Number.parseFloat(e.target.value);
+                                  const unitPrice = Number.isFinite(n) ? n : undefined;
+                                  const qty = b.qty ?? 0;
+                                  const gross =
+                                    unitPrice !== undefined && Number.isFinite(qty)
+                                      ? Math.round(qty * unitPrice * 100) / 100
+                                      : 0;
+                                  onBookingDraftChange(
+                                    bookingDraft.map((row, i) =>
+                                      i === idx ? { ...row, unitPrice, grossAmount: gross } : row
+                                    )
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="any"
+                                className="booking-num-input"
+                                value={b.grossAmount}
+                                onChange={(e) => {
+                                  const n = Number.parseFloat(e.target.value);
+                                  onBookingDraftChange(
+                                    bookingDraft.map((row, i) =>
+                                      i === idx ? { ...row, grossAmount: Number.isFinite(n) ? n : 0 } : row
+                                    )
+                                  );
+                                }}
+                                title={t(language, "cloudBookingsGrossHint")}
+                                aria-label={t(language, "cloudBookingsGrossHint")}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="any"
+                                className="booking-num-input"
+                                value={b.feesAmount}
+                                onChange={(e) => {
+                                  const n = Number.parseFloat(e.target.value);
+                                  onBookingDraftChange(
+                                    bookingDraft.map((row, i) =>
+                                      i === idx ? { ...row, feesAmount: Number.isFinite(n) ? n : 0 } : row
+                                    )
+                                  );
+                                }}
+                              />
+                            </td>
+                          </>
+                        )}
+                        <td>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className="booking-num-input"
+                            autoComplete="off"
+                            value={
+                              bookingTaxFocus?.idx === idx
+                                ? bookingTaxFocus.draft
+                                : formatDecimalForForm(Number.isFinite(b.taxAmount) ? b.taxAmount : 0, numberLocale)
+                            }
+                            onFocus={() =>
+                              setBookingTaxFocus({
+                                idx,
+                                draft: formatDecimalForForm(Number.isFinite(b.taxAmount) ? b.taxAmount : 0, numberLocale)
+                              })
+                            }
+                            onChange={(e) => setBookingTaxFocus({ idx, draft: e.target.value })}
+                            onBlur={(e) => {
+                              const raw = e.target.value;
+                              const trimmed = raw.trim();
+                              let nextTax = trimmed === "" ? 0 : (parseLocaleDecimal(raw, numberLocale) ?? 0);
+                              if (!Number.isFinite(nextTax)) nextTax = 0;
+                              if (b.kind !== "TAX_CORRECTION" && nextTax < 0) nextTax = 0;
+                              onBookingDraftChange(
+                                bookingDraft.map((row, i) => (i === idx ? { ...row, taxAmount: nextTax } : row))
+                              );
+                              setBookingTaxFocus(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary slim"
+                            disabled={!canRemove}
+                            onClick={() => onBookingDraftChange(bookingDraft.filter((_, i) => i !== idx))}
+                          >
+                            {t(language, "cloudBookingsRemove")}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="trade-cloud-bookings-actions">
+              {isTaxCorrectionType ? (
+                <button
+                  type="button"
+                  className="secondary slim"
+                  onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("TAX_CORRECTION")])}
+                >
+                  {t(language, "cloudBookingsAddTax")}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary slim"
+                    onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("BUY")])}
+                  >
+                    {t(language, "cloudBookingsAddBuy")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary slim"
+                    onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("SELL")])}
+                  >
+                    {t(language, "cloudBookingsAddSell")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {!isCashflowBookingType && (
-          <div
-            className="card form-card card-span-1 calc-card"
-            style={{
-              opacity: disableBuyDataForCashflowTypes ? 0.45 : 1,
-              pointerEvents: disableBuyDataForCashflowTypes ? "none" : "auto"
-            }}
-          >
+          <div className="card form-card card-span-1 calc-card">
           <div className="card-title-row">
             <h3>{t(language, "buyData")}</h3>
             <Landmark size={20} className="card-title-icon" />
@@ -567,7 +950,6 @@ export function NewTradeView({
                   value={kaufzeitpunktDisplay}
                   onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
                   onBlur={commitKaufzeitpunktDisplay}
-                  disabled={disableBuyDataForCashflowTypes}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -585,7 +967,6 @@ export function NewTradeView({
                     setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
                     setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
                   }}
-                  disabled={disableBuyDataForCashflowTypes}
                 >
                   <Clock3 size={14} />
                 </button>
@@ -600,7 +981,6 @@ export function NewTradeView({
                   min="0"
                   value={form.stueck}
                   onChange={(e) => handleStueckChange(e.target.value)}
-                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
@@ -610,7 +990,6 @@ export function NewTradeView({
                   min="0"
                   value={form.kaufStueckpreis}
                   onChange={(e) => setForm((prev) => ({ ...prev, kaufStueckpreis: e.target.value, kaufTransaktionManuell: "" }))}
-                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
@@ -630,7 +1009,6 @@ export function NewTradeView({
                       };
                     })
                   }
-                  disabled={disableBuyDataForCashflowTypes}
                   placeholder={kaufTransaktionValue > 0 ? kaufTransaktionValue.toFixed(2) : "0,00"}
                 />
               </div>
@@ -642,7 +1020,6 @@ export function NewTradeView({
                 step="0.01"
                 value={form.kaufGebuehren}
                 onChange={(e) => setForm((prev) => ({ ...prev, kaufGebuehren: e.target.value }))}
-                disabled={disableBuyDataForCashflowTypes}
                 placeholder="0,00"
               />
             </label>
@@ -657,7 +1034,6 @@ export function NewTradeView({
                 step="0.01"
                 value={form.kaufPreisManuell !== "" ? form.kaufPreisManuell : kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, kaufPreisManuell: e.target.value }))}
-                disabled={disableBuyDataForCashflowTypes}
                 placeholder={kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : "0,00"}
               />
             </label>
@@ -671,6 +1047,26 @@ export function NewTradeView({
             <ChartCandlestick size={20} className="card-title-icon" />
           </div>
           <div className="form-grid trade-row-grid">
+            <label className="field-span-full">
+              <span className="field-title">{t(language, "status")}</span>
+              <select
+                value={form.tradeStatus}
+                onChange={(e) => {
+                  const v = e.target.value as Trade["status"];
+                  if (v === "Offen") {
+                    setForm((prev) => ({ ...prev, tradeStatus: "Offen", verkaufszeitpunkt: "" }));
+                    setVerkaufszeitpunktDisplay("");
+                    onBookingDraftChange(bookingDraft.filter((row) => row.kind !== "SELL"));
+                  } else {
+                    setForm((prev) => ({ ...prev, tradeStatus: "Geschlossen" }));
+                  }
+                }}
+              >
+                <option value="Offen">{t(language, "open")}</option>
+                <option value="Geschlossen">{t(language, "closed")}</option>
+              </select>
+            </label>
+            <fieldset disabled={form.tradeStatus === "Offen"} style={{ border: 0, padding: 0, margin: 0, display: "contents" }}>
             <label className="field-span-full">
               <span className="field-title">{t(language, "sellTime")}</span>
               <div className="date-input-row">
@@ -693,7 +1089,7 @@ export function NewTradeView({
                   title={t(language, "useNow")}
                   onClick={() => {
                     const nowValue = getNowLocalDateTimeValue();
-                    setForm((prev) => ({ ...prev, verkaufszeitpunkt: nowValue }));
+                    setForm((prev) => ({ ...prev, verkaufszeitpunkt: nowValue, tradeStatus: "Geschlossen" }));
                     setVerkaufszeitpunktDisplay(formatDateTimeDisplay(nowValue));
                   }}
                 >
@@ -708,8 +1104,16 @@ export function NewTradeView({
                   type="number"
                   step="0.0001"
                   min="0"
-                  value={form.stueck}
-                  onChange={(e) => handleStueckChange(e.target.value)}
+                  value={
+                    showBookingEditor
+                      ? form.stueckVerkauf
+                      : form.stueckVerkauf.trim() !== ""
+                        ? form.stueckVerkauf
+                        : form.stueck
+                  }
+                  readOnly={showBookingEditor}
+                  title={showBookingEditor ? t(language, "sellQtyFromBookingsHint") : undefined}
+                  onChange={(e) => handleVerkaufStueckChange(e.target.value)}
                   placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
@@ -729,7 +1133,7 @@ export function NewTradeView({
                   onChange={(e) =>
                     setForm((prev) => {
                       const manual = e.target.value;
-                      const qty = Number.parseFloat(prev.stueck) || 0;
+                      const qty = Number.parseFloat(prev.stueckVerkauf.trim() !== "" ? prev.stueckVerkauf : prev.stueck) || 0;
                       const manualValue = Number.parseFloat(manual);
                       return {
                         ...prev,
@@ -753,132 +1157,28 @@ export function NewTradeView({
               />
             </label>
             <div className="field-spacer field-span-full" aria-hidden="true" />
+            </fieldset>
           </div>
           <div className="calc-footer">
-            <div className="calc-separator" aria-hidden="true" />
-            <label className="calc-right-row">
-              <span className="field-title">{t(language, "sellProceedsEur")}</span>
-              <input
-                type="number"
-                step="0.01"
-                value={form.verkaufPreisManuell !== "" ? form.verkaufPreisManuell : stueckValue > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : ""}
-                onChange={(e) => setForm((prev) => ({ ...prev, verkaufPreisManuell: e.target.value }))}
-                placeholder={stueckValue > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : "0,00"}
-              />
-            </label>
+            <fieldset disabled={form.tradeStatus === "Offen"} style={{ border: 0, padding: 0, margin: 0, display: "contents" }}>
+              <div className="calc-separator" aria-hidden="true" />
+              <label className="calc-right-row">
+                <span className="field-title">{t(language, "sellProceedsEur")}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.verkaufPreisManuell !== "" ? form.verkaufPreisManuell : verkaufStueckCount > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufPreisManuell: e.target.value }))}
+                  placeholder={verkaufStueckCount > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : "0,00"}
+                />
+              </label>
+            </fieldset>
           </div>
         </div>}
 
-        {isIncomeType && (
-          <div className="card form-card card-span-1 calc-card">
-            <div className="card-title-row">
-              <h3>{t(language, "booking")}</h3>
-              <ChartCandlestick size={20} className="card-title-icon" />
-            </div>
-            <div className="form-grid trade-row-grid">
-              <label className="field-span-full">
-                <span className="field-title">{t(language, buyTimeLabelKey)}</span>
-                <div className="date-input-row">
-                  <input
-                    type="text"
-                    value={kaufzeitpunktDisplay}
-                    onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
-                    onBlur={commitKaufzeitpunktDisplay}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        commitKaufzeitpunktDisplay();
-                      }
-                    }}
-                    placeholder={t(language, "datePlaceholder")}
-                  />
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title={t(language, "useNow")}
-                    onClick={() => {
-                      const nowValue = getNowLocalDateTimeValue();
-                      setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
-                      setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
-                    }}
-                  >
-                    <Clock3 size={14} />
-                  </button>
-                </div>
-              </label>
-              <label className="field-span-full calc-right-row">
-                <span className="field-title">{t(language, "differenceEur")}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.verkaufTransaktionManuell}
-                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufTransaktionManuell: e.target.value }))}
-                  placeholder="0,00"
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
-        {isTaxCorrectionType && (
-          <div className="card form-card card-span-1 calc-card">
-            <div className="card-title-row">
-              <h3>{t(language, "taxEur")}</h3>
-              <ChartCandlestick size={20} className="card-title-icon" />
-            </div>
-            <div className="form-grid trade-row-grid">
-              <label className="field-span-full">
-                <span className="field-title">{t(language, buyTimeLabelKey)}</span>
-                <div className="date-input-row">
-                  <input
-                    type="text"
-                    value={kaufzeitpunktDisplay}
-                    onChange={(e) => setKaufzeitpunktDisplay(e.target.value)}
-                    onBlur={commitKaufzeitpunktDisplay}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        commitKaufzeitpunktDisplay();
-                      }
-                    }}
-                    placeholder={t(language, "datePlaceholder")}
-                  />
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title={t(language, "useNow")}
-                    onClick={() => {
-                      const nowValue = getNowLocalDateTimeValue();
-                      setForm((prev) => ({ ...prev, kaufzeitpunkt: nowValue }));
-                      setKaufzeitpunktDisplay(formatDateTimeDisplay(nowValue));
-                    }}
-                  >
-                    <Clock3 size={14} />
-                  </button>
-                </div>
-              </label>
-              <label className="field-span-full calc-right-row tax-row">
-                <span className="field-title">{t(language, "taxEur")}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.verkaufSteuern}
-                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                  placeholder="0,00"
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
         <div
           className={`card form-card card-span-1 result-card ${gewinn > 0 ? "is-win" : gewinn < 0 ? "is-loss" : "is-neutral"}`}
-          style={
-            {
-              "--result-tint-strength": `${resultTintStrength}`,
-              ...(isCashflowBookingType ? { gridColumn: "3" } : {})
-            } as React.CSSProperties
-          }
+          style={{ "--result-tint-strength": `${resultTintStrength}` } as React.CSSProperties}
         >
           <div className="card-title-row">
             <h3>{t(language, "result")}</h3>
@@ -888,106 +1188,49 @@ export function NewTradeView({
             </button>
           </div>
           <div className="form-grid">
-            {isTaxCorrectionType ? (
+            <>
               <label className="field-span-full calc-right-row">
-                {renderResultLabel(t(language, "taxEur"), "Steuerbetrag laut Eingabe/Beleg (bei Steuerkorrektur direkt als Wert gespeichert).")}
+                {renderResultLabel(t(language, "differenceEur"), "Differenz = Verkaufserlös vor Steuer - Kaufpreis.")}
+                <input
+                  type="number"
+                  step="0.01"
+                  value={Number.isFinite(differenz) ? differenz.toFixed(2) : ""}
+                  onChange={(e) => handleDifferenzInput(e.target.value)}
+                  placeholder="0,00"
+                />
+              </label>
+              <label className="field-span-full calc-right-row">
+                {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung aus (Verkaufstransaktion - Kauftransaktion) × Steuersatz.")}
                 <input
                   type="number"
                   step="0.01"
                   value={form.verkaufSteuern}
                   onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
+                  placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
+                />
+              </label>
+              <div className="calc-separator field-span-full" aria-hidden="true" />
+              <label className="field-span-full calc-right-row">
+                {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer.")}
+                <input
+                  type="number"
+                  step="0.01"
+                  value={Number.isFinite(gewinn) ? gewinn.toFixed(2) : ""}
+                  onChange={(e) => handleGewinnInput(e.target.value)}
                   placeholder="0,00"
                 />
               </label>
-            ) : isIncomeType ? (
-              <>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "differenceEur"), "Differenz = Bruttobetrag (Buchung) aus den Verkaufsdaten.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(differenz) ? differenz.toFixed(2) : ""}
-                    onChange={(e) => handleIncomeDifferenzInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung mit Standard-Steuersatz.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.verkaufSteuern}
-                    onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                    placeholder={Number.isFinite(incomeGrossValue) && incomeGrossValue > 0 ? money(-incomeGrossValue * incomeTaxRate) : "0,00"}
-                  />
-                </label>
-                <div className="calc-separator field-span-full" aria-hidden="true" />
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer - Kaufpreis.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(gewinn) ? gewinn.toFixed(2) : ""}
-                    onChange={(e) => handleIncomeGewinnInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "returnPct"), "Rendite (%) = Gewinn / Kaufpreis × 100.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(rendite) ? rendite.toFixed(2) : ""}
-                    onChange={(e) => handleIncomeRenditeInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "differenceEur"), "Differenz = Verkaufserlös vor Steuer - Kaufpreis.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(differenz) ? differenz.toFixed(2) : ""}
-                    onChange={(e) => handleDifferenzInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung aus (Verkaufstransaktion - Kauftransaktion) × Steuersatz.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.verkaufSteuern}
-                    onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                    placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
-                  />
-                </label>
-                <div className="calc-separator field-span-full" aria-hidden="true" />
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(gewinn) ? gewinn.toFixed(2) : ""}
-                    onChange={(e) => handleGewinnInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-                <label className="field-span-full calc-right-row">
-                  {renderResultLabel(t(language, "returnPct"), "Rendite (%) = Gewinn / Kaufpreis × 100.")}
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number.isFinite(rendite) ? rendite.toFixed(2) : ""}
-                    onChange={(e) => handleRenditeInput(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-              </>
-            )}
+              <label className="field-span-full calc-right-row">
+                {renderResultLabel(t(language, "returnPct"), "Rendite (%) = Gewinn / Kaufpreis × 100.")}
+                <input
+                  type="number"
+                  step="0.01"
+                  value={Number.isFinite(rendite) ? rendite.toFixed(2) : ""}
+                  onChange={(e) => handleRenditeInput(e.target.value)}
+                  placeholder="0,00"
+                />
+              </label>
+            </>
           </div>
         </div>
 
@@ -1180,6 +1423,8 @@ export function NewTradeView({
           {t(language, "cancel")}
         </button>
       </div>
+        </>
+      )}
     </section>
   );
 }

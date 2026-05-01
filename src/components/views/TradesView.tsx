@@ -4,8 +4,9 @@ import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
 import type { SortDirection, TradesSortField } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
-import { getTradeRealizedPL, isTradeClosed, money } from "../../lib/analytics";
+import { getTradeBoughtQty, getTradeRealizedPL, getTradeSoldQty, isTradeClosed, money } from "../../lib/analytics";
 import type { Trade } from "../../types/trade";
+import { TRADES_COLUMN_PREFS_STORAGE_KEY } from "../../lib/backup";
 import { buildTraderSearchUrl, getTraderProviderDisplayNameForLanguage, getTraderSearchQueryForTrade, traderProviderShortLabel } from "../../lib/traderLinks";
 import { PageHeader } from "../PageHeader";
 
@@ -69,7 +70,7 @@ export function TradesView(props: TradesViewProps) {
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
   const [copyFeedback, setCopyFeedback] = useState<"idle" | "ok" | "error">("idle");
 
-  const columnPrefsKey = "trades-columns-v1";
+  const columnPrefsKey = TRADES_COLUMN_PREFS_STORAGE_KEY;
   const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
     { value: "Alle", label: t(props.language, "all") },
     { value: "Offen", label: t(props.language, "open") },
@@ -219,13 +220,19 @@ export function TradesView(props: TradesViewProps) {
         id: "kaufStueck" satisfies ColumnId,
         label: "K#",
         draggable: true,
-        render: (trade: Trade) => (trade.stueck !== undefined ? trade.stueck : "-")
+        render: (trade: Trade) => {
+          const q = getTradeBoughtQty(trade);
+          return q > 0 ? q : trade.stueck !== undefined ? trade.stueck : "-";
+        }
       },
       verkaufStueck: {
         id: "verkaufStueck" satisfies ColumnId,
         label: "V#",
         draggable: true,
-        render: (trade: Trade) => (isTradeClosed(trade) && trade.stueck !== undefined ? trade.stueck : "-")
+        render: (trade: Trade) => {
+          const sold = getTradeSoldQty(trade);
+          return sold > 0 ? sold : "-";
+        }
       },
       extern: {
         id: "extern" satisfies ColumnId,
@@ -334,10 +341,14 @@ export function TradesView(props: TradesViewProps) {
         return trade.typ;
       case "basiswert":
         return trade.basiswert?.trim() ? trade.basiswert : "-";
-      case "kaufStueck":
-        return trade.stueck !== undefined ? `${trade.stueck}` : "-";
-      case "verkaufStueck":
-        return isTradeClosed(trade) && trade.stueck !== undefined ? `${trade.stueck}` : "-";
+      case "kaufStueck": {
+        const b = getTradeBoughtQty(trade);
+        return b > 0 ? `${b}` : trade.stueck !== undefined ? `${trade.stueck}` : "-";
+      }
+      case "verkaufStueck": {
+        const s = getTradeSoldQty(trade);
+        return s > 0 ? `${s}` : "-";
+      }
       case "extern":
         return getTraderSearchQueryForTrade(trade) || "-";
       case "isin":

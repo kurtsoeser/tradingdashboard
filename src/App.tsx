@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import type { Trade } from "./types/trade";
+import type { Trade, TradePositionBooking } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
-import { saveTradesToStorage } from "./lib/storage";
-import { buildAppBackupJson, parseTradesBackupImport } from "./lib/backup";
+import { loadTradesFromStorage, saveTradesToStorage } from "./lib/storage";
+import { buildAppBackupJson, parseTradesBackupImport, TRADES_COLUMN_PREFS_STORAGE_KEY } from "./lib/backup";
 import { parseAssetsCsv, parseAssetsExcel, parseTradesCsv, parseTradesExcel } from "./lib/csv";
 import {
   applyBasiswertMergeToTrades,
@@ -21,6 +21,7 @@ import { buildAnalyticsData, buildAssetRows, buildDashboardMonthlyStats, buildDa
 import { type AssetMeta, type AssetSortField, type DashboardOpenSortField, defaultForm, type NewTradeForm, type SortDirection, type TradesSortField, type View } from "./app/types";
 import { SidebarNav } from "./components/layout/SidebarNav";
 import { DashboardView } from "./components/views/DashboardView";
+import { BookingsView } from "./components/views/BookingsView";
 import { TradesView } from "./components/views/TradesView";
 import { NewTradeView } from "./components/views/NewTradeView";
 import { AssetsView } from "./components/views/AssetsView";
@@ -39,6 +40,15 @@ import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "
 import { toIsoWeekKey, toLocalYmd } from "./lib/journalIsoWeek";
 import { buildReconcileRows } from "./lib/isinWknReconcile";
 import { loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/cloudStorage";
+import {
+  assignLegacyLegs,
+  cloneBookings,
+  syntheticBookingsFromTrade,
+  syncLastSellBookingTimeFromForm,
+  tradeFormAggregatesFromBookings
+} from "./lib/bookingsDraft";
+import { buildFlatBookingRows } from "./lib/flattenBookings";
+import { formatDecimalForForm, parseLocaleDecimal } from "./lib/numberLocale";
 import { supabase, supabaseConfigured } from "./lib/supabaseClient";
 
 function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: string): string {
@@ -126,6 +136,7 @@ export default function App() {
     })
   );
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
+  const [bookingDraft, setBookingDraft] = useState<TradePositionBooking[]>([]);
   /** Stabile Trade-ID für Autospeichern bei neuem Trade (ohne Bearbeitungsmodus). */
   const newTradeDraftIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
@@ -317,7 +328,18 @@ export default function App() {
         const remote = await loadCloudSnapshot(userId);
         if (cancelled) return;
         if (remote) {
-          const normalizedTrades = normalizeTradesOnLoad(Array.isArray(remote.trades) ? remote.trades : []).trades;
+          const remoteTradeArr = Array.isArray(remote.trades) ? remote.trades : [];
+          const normalizedFromRemote = normalizeTradesOnLoad(remoteTradeArr).trades;
+          const localBackup = loadTradesFromStorage();
+          const normalizedTrades =
+            normalizedFromRemote.length === 0 && localBackup.length > 0
+              ? normalizeTradesOnLoad(localBackup).trades
+              : normalizedFromRemote;
+          if (normalizedFromRemote.length === 0 && localBackup.length > 0) {
+            console.warn(
+              "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
+            );
+          }
           setTrades(normalizedTrades);
           saveTradesToStorage(normalizedTrades);
           setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
@@ -539,6 +561,7 @@ export default function App() {
     [trades, assetMeta]
   );
   const reconcileRows = useMemo(() => buildReconcileRows(trades, assetMeta), [trades, assetMeta]);
+  const allBookingRows = useMemo(() => buildFlatBookingRows(trades), [trades]);
 
   const assetRowsWithMeta = useMemo(() => {
     const byName = new Map(assetRows.map((row) => [row.name.toLowerCase(), row]));
@@ -657,11 +680,19 @@ export default function App() {
         setAiKnowledgeBase(backup.aiKnowledgeBase);
         saveAiKnowledgeToStorage(backup.aiKnowledgeBase);
       }
+      if (backup.tradesTableColumnPrefs) {
+        try {
+          window.localStorage.setItem(TRADES_COLUMN_PREFS_STORAGE_KEY, JSON.stringify(backup.tradesTableColumnPrefs));
+        } catch {
+          // Ignoriere Storage-Fehler.
+        }
+      }
       const moreParts: string[] = [];
       if (backup.appSettings) moreParts.push(t(lang, "importJsonPartSettings"));
       if (backup.theme) moreParts.push(t(lang, "importJsonPartTheme"));
       if (backup.journal) moreParts.push(t(lang, "importJsonPartJournal"));
       if (backup.aiKnowledgeBase !== undefined) moreParts.push(t(lang, "importJsonPartAiKb"));
+      if (backup.tradesTableColumnPrefs) moreParts.push(t(lang, "importJsonPartTradesColumns"));
       const more =
         moreParts.length > 0
           ? t(lang, "importJsonOkMore", { list: moreParts.join(", ") })
@@ -978,6 +1009,9 @@ export default function App() {
   };
 
   const stueck = Number.parseFloat(form.stueck) || 0;
+  const stueckVerkaufParsed = Number.parseFloat(form.stueckVerkauf);
+  const verkaufStueckEffective =
+    form.stueckVerkauf.trim() !== "" && Number.isFinite(stueckVerkaufParsed) ? stueckVerkaufParsed || 0 : stueck;
   const kaufStueckpreis = Number.parseFloat(form.kaufStueckpreis) || 0;
   const kaufTransaktionManuell = Number.parseFloat(form.kaufTransaktionManuell);
   const kaufGebuehren = Number.parseFloat(form.kaufGebuehren) || 0;
@@ -990,52 +1024,60 @@ export default function App() {
   const kaufTransaktion =
     form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : stueck > 0 ? stueck * kaufStueckpreis : 0;
   const verkaufTransaktion =
-    form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : stueck > 0 ? stueck * verkaufStueckpreis : 0;
+    form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
+      ? verkaufTransaktionManuell
+      : verkaufStueckEffective > 0
+        ? verkaufStueckEffective * verkaufStueckpreis
+        : 0;
   const steuerpflichtigerGewinn = Math.max(0, verkaufTransaktion - kaufTransaktion);
   const isTaxCorrectionType = form.typ === "Steuerkorrektur";
   const isInterestType = form.typ === "Zinszahlung";
   const isDividendType = form.typ === "Dividende";
   const isIncomeType = isInterestType || isDividendType;
-  const explicitTaxInput = Number.parseFloat(form.verkaufSteuern);
+  const taxAmountLocale = appSettings.language === "en" ? "en" : "de";
+  const verkaufSteuernFormStr = String(form.verkaufSteuern ?? "").trim();
+  const taxCorrectionParsed =
+    isTaxCorrectionType && verkaufSteuernFormStr !== ""
+      ? parseLocaleDecimal(verkaufSteuernFormStr, taxAmountLocale)
+      : null;
+  const explicitTaxInput = parseLocaleDecimal(verkaufSteuernFormStr, taxAmountLocale) ?? NaN;
   const incomeGrossInput = form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell) ? verkaufTransaktionManuell : 0;
   const sellAmountInput =
     form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)
       ? verkaufPreisManuell
       : form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
       ? verkaufTransaktionManuell
-      : stueck > 0 && verkaufStueckpreis > 0
+      : verkaufStueckEffective > 0 && verkaufStueckpreis > 0
       ? verkaufTransaktion
       : 0;
   const verkaufSteuern = isTaxCorrectionType
-    ? form.verkaufSteuern.trim() !== ""
-      ? Number.isFinite(explicitTaxInput)
-        ? explicitTaxInput
-        : 0
+    ? verkaufSteuernFormStr !== "" && taxCorrectionParsed !== null
+      ? taxCorrectionParsed
       : sellAmountInput
     : isIncomeType
-    ? form.verkaufSteuern.trim() !== ""
+    ? verkaufSteuernFormStr !== ""
       ? (() => {
-          const parsed = Number.parseFloat(form.verkaufSteuern);
+          const parsed = parseLocaleDecimal(verkaufSteuernFormStr, taxAmountLocale) ?? Number.parseFloat(verkaufSteuernFormStr);
           if (!Number.isFinite(parsed)) return 0;
           return parsed > 0 ? -parsed : parsed;
         })()
       : -incomeGrossInput * (isInterestType ? 0.2 : 0.275)
-    : form.verkaufSteuern.trim() === ""
+    : verkaufSteuernFormStr === ""
     ? -steuerpflichtigerGewinn * 0.275
     : (() => {
-        const parsed = Number.parseFloat(form.verkaufSteuern);
-        if (!Number.isFinite(parsed)) return 0;
+        const parsed = parseLocaleDecimal(verkaufSteuernFormStr, taxAmountLocale);
+        if (parsed === null) return 0;
         // Für normale Trades/Dividende/Zins: positive Eingabe als Steuerzahlung interpretieren.
         return parsed > 0 ? -parsed : parsed;
       })();
   const kaufPreis = form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : kaufTransaktion + kaufGebuehren;
   const verkaufGebuehrenEffective = isIncomeType ? 0 : verkaufGebuehren;
-  const verkaufErlosVorSteuerAutomatisch = stueck > 0 ? verkaufTransaktion - verkaufGebuehrenEffective : 0;
+  const verkaufErlosVorSteuerAutomatisch = verkaufStueckEffective > 0 ? verkaufTransaktion - verkaufGebuehrenEffective : 0;
   const verkaufErlosVorSteuer =
     form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell) ? verkaufPreisManuell : verkaufErlosVorSteuerAutomatisch;
   const incomeNet = incomeGrossInput + verkaufSteuern;
   const verkaufPreis = isTaxCorrectionType ? 0 : isIncomeType ? incomeNet : verkaufErlosVorSteuer + verkaufSteuern;
-  const statusClosed = isTaxCorrectionType || isIncomeType ? !!form.kaufzeitpunkt : !!form.verkaufszeitpunkt;
+  const statusClosed = isTaxCorrectionType || isIncomeType ? !!form.kaufzeitpunkt : form.tradeStatus === "Geschlossen";
   const isCashflowType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const isNoBasiswertType = form.typ === "Steuerkorrektur" || form.typ === "Zinszahlung";
   const hasKaufData =
@@ -1049,19 +1091,24 @@ export default function App() {
   const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufErlosVorSteuer - kaufPreisEffective) : 0;
   const steuerBetrag = statusClosed ? verkaufSteuern : 0;
   const rendite = kaufPreisEffective > 0 ? (gewinn / kaufPreisEffective) * 100 : 0;
-  const haltedauer = statusClosed ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
+  const haltedauer =
+    statusClosed && form.verkaufszeitpunkt ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
 
   const hasVerkaufData =
     (form.verkaufPreisManuell.trim() !== "" && Number.isFinite(verkaufPreisManuell)) ||
     (form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)) ||
-    (stueck > 0 && verkaufStueckpreis > 0) ||
-    (form.verkaufSteuern.trim() !== "" && Number.isFinite(explicitTaxInput));
+    (verkaufStueckEffective > 0 && verkaufStueckpreis > 0) ||
+    (verkaufSteuernFormStr !== "" && Number.isFinite(explicitTaxInput));
+
+  /** SELL-Zeilen im Buchungs-Editor (für Speichern/Validierung auch ohne ausgefülltes Verkaufsdatum in der Kachel). */
+  const hasSellBookings =
+    !!editingTradeId &&
+    !isTaxCorrectionType &&
+    !isIncomeType &&
+    bookingDraft.some((r) => r.kind === "SELL");
 
   const canSaveTrade = isTaxCorrectionType
-    ? !!form.name.trim() &&
-      !!form.kaufzeitpunkt &&
-      form.verkaufSteuern.trim() !== "" &&
-      Number.isFinite(explicitTaxInput)
+    ? !!form.name.trim() && !!form.kaufzeitpunkt && taxCorrectionParsed !== null
     : isIncomeType
     ? !!form.name.trim() &&
       (isNoBasiswertType || !!form.basiswert.trim()) &&
@@ -1076,13 +1123,37 @@ export default function App() {
       !!form.kaufzeitpunkt &&
       stueck > 0 &&
       kaufStueckpreis > 0 &&
-      kaufPreis > 0;
+      kaufPreis > 0 &&
+      (form.tradeStatus !== "Geschlossen" ||
+        (hasVerkaufData && (!!form.verkaufszeitpunkt?.trim() || hasSellBookings)));
 
   const persistTradeFromForm = (finalize: boolean): boolean => {
     if (!canSaveTrade) return false;
     const effectiveId = editingTradeId ?? (newTradeDraftIdRef.current ?? `trade-${Date.now()}`);
     if (!editingTradeId) newTradeDraftIdRef.current = effectiveId;
-    const next: Trade = {
+    const shouldAttachBookings =
+      !!editingTradeId && form.typ !== "Dividende" && form.typ !== "Zinszahlung";
+    const verkaufSteuernResolved =
+      statusClosed && isTaxCorrectionType && taxCorrectionParsed !== null ? taxCorrectionParsed : verkaufSteuern;
+
+    let verkaufLocalForStore = form.verkaufszeitpunkt;
+    if (
+      statusClosed &&
+      !isTaxCorrectionType &&
+      !isIncomeType &&
+      !verkaufLocalForStore?.trim() &&
+      bookingDraft.some((r) => r.kind === "SELL")
+    ) {
+      const sells = bookingDraft.filter((r) => r.kind === "SELL");
+      const last = [...sells].sort(
+        (a, b) =>
+          (parseStoredDateTime(b.bookedAtIso)?.getTime() ?? 0) -
+          (parseStoredDateTime(a.bookedAtIso)?.getTime() ?? 0)
+      )[0];
+      if (last?.bookedAtIso) verkaufLocalForStore = toLocalInputValue(last.bookedAtIso);
+    }
+
+    const nextBase: Trade = {
       id: effectiveId,
       name: form.name.trim(),
       typ: form.typ,
@@ -1098,7 +1169,8 @@ export default function App() {
         isTaxCorrectionType || isIncomeType ? undefined : form.kaufTransaktionManuell.trim() !== "" && Number.isFinite(kaufTransaktionManuell) ? kaufTransaktionManuell : undefined,
       kaufGebuehren: isTaxCorrectionType || isIncomeType ? 0 : kaufGebuehrenEffective,
       kaufPreisManuell: isTaxCorrectionType || isIncomeType ? undefined : form.kaufPreisManuell.trim() !== "" && Number.isFinite(kaufPreisManuell) ? kaufPreisManuell : undefined,
-      verkaufszeitpunkt: isTaxCorrectionType || isIncomeType ? undefined : statusClosed ? toDisplayDateTime(form.verkaufszeitpunkt) : undefined,
+      verkaufszeitpunkt:
+        isTaxCorrectionType || isIncomeType ? undefined : statusClosed ? toDisplayDateTime(verkaufLocalForStore) : undefined,
       verkaufPreis: statusClosed ? verkaufPreis : undefined,
       verkaufStueckpreis: isTaxCorrectionType || isIncomeType ? undefined : statusClosed && verkaufStueckpreis > 0 ? verkaufStueckpreis : undefined,
       verkaufTransaktionManuell:
@@ -1111,7 +1183,7 @@ export default function App() {
           : statusClosed && form.verkaufTransaktionManuell.trim() !== "" && Number.isFinite(verkaufTransaktionManuell)
           ? verkaufTransaktionManuell
           : undefined,
-      verkaufSteuern: statusClosed ? verkaufSteuern : undefined,
+      verkaufSteuern: statusClosed ? verkaufSteuernResolved : undefined,
       verkaufGebuehren: statusClosed ? verkaufGebuehrenEffective : undefined,
       verkaufPreisManuell:
         isTaxCorrectionType || isIncomeType
@@ -1123,6 +1195,32 @@ export default function App() {
       status: statusClosed ? "Geschlossen" : "Offen"
     };
     setTrades((prev) => {
+      const bookingsForTrade = shouldAttachBookings
+        ? assignLegacyLegs(
+            (() => {
+              if (isTaxCorrectionType) return syntheticBookingsFromTrade(nextBase);
+              if (!statusClosed) {
+                // Teilverkauf: Position „Offen“, aber SELL-Zeilen in den Buchungen müssen erhalten bleiben
+                // (sonst verwirft jedes Speichern/Autosave die erfassten Verkäufe).
+                const hasSellLegs = bookingDraft.some((r) => r.kind === "SELL");
+                if (hasSellLegs) {
+                  let rows = cloneBookings(bookingDraft);
+                  if (verkaufLocalForStore?.trim()) {
+                    rows = syncLastSellBookingTimeFromForm(rows, verkaufLocalForStore);
+                  }
+                  return rows;
+                }
+                const withoutSells = bookingDraft.filter((r) => r.kind !== "SELL");
+                return withoutSells.length > 0 ? cloneBookings(withoutSells) : syntheticBookingsFromTrade(nextBase);
+              }
+              if (bookingDraft.length > 0) {
+                return syncLastSellBookingTimeFromForm(cloneBookings(bookingDraft), verkaufLocalForStore);
+              }
+              return syntheticBookingsFromTrade(nextBase);
+            })()
+          )
+        : undefined;
+      const next: Trade = bookingsForTrade ? { ...nextBase, bookings: bookingsForTrade } : nextBase;
       const exists = prev.some((trade) => trade.id === effectiveId);
       const updated = exists ? prev.map((trade) => (trade.id === effectiveId ? next : trade)) : [next, ...prev];
       saveTradesToStorage(updated);
@@ -1132,6 +1230,7 @@ export default function App() {
       newTradeDraftIdRef.current = null;
       setForm(makeDefaultTradeForm());
       setEditingTradeId(null);
+      setBookingDraft([]);
       setView("trades");
     }
     return true;
@@ -1164,11 +1263,13 @@ export default function App() {
     newTradeDraftIdRef.current = null;
     setForm(makeDefaultTradeForm());
     setEditingTradeId(null);
+    setBookingDraft([]);
   };
 
   const startNewTrade = () => {
     newTradeDraftIdRef.current = null;
     setEditingTradeId(null);
+    setBookingDraft([]);
     setForm(makeDefaultTradeForm());
     setView("newTrade");
   };
@@ -1268,12 +1369,25 @@ export default function App() {
     if (editingTradeId === id) {
       setEditingTradeId(null);
       setForm(makeDefaultTradeForm());
+      setBookingDraft([]);
     }
   };
   const editTrade = (trade: Trade) => {
     newTradeDraftIdRef.current = null;
-    const qty = trade.stueck && trade.stueck > 0 ? trade.stueck : 1;
+    const bookingSource =
+      trade.bookings && trade.bookings.length > 0 ? trade.bookings : syntheticBookingsFromTrade(trade);
+    const agg = tradeFormAggregatesFromBookings(bookingSource);
+    const stueckStr = agg.buy?.stueck ?? `${trade.stueck && trade.stueck > 0 ? trade.stueck : 1}`;
+    const stueckVerkaufStr = agg.sell?.stueckVerkauf ?? "";
+    const buyQty = Number.parseFloat(stueckStr) || 1;
+    const sellQtyForPreis =
+      stueckVerkaufStr.trim() !== "" ? Number.parseFloat(stueckVerkaufStr) || buyQty : buyQty;
     setEditingTradeId(trade.id);
+    if (trade.typ === "Dividende" || trade.typ === "Zinszahlung" || trade.typ === "Steuerkorrektur") {
+      setBookingDraft([]);
+    } else {
+      setBookingDraft(cloneBookings(bookingSource));
+    }
     setForm({
       name: trade.name,
       typ: trade.typ,
@@ -1281,16 +1395,26 @@ export default function App() {
       isin: trade.isin ?? "",
       wkn: trade.wkn ?? "",
       notiz: trade.notiz ?? "",
+      tradeStatus: trade.status,
       kaufzeitpunkt: toLocalInputValue(trade.kaufzeitpunkt),
-      stueck: `${qty}`,
-      kaufStueckpreis: trade.kaufStueckpreis !== undefined ? `${trade.kaufStueckpreis}` : `${(trade.kaufPreis ?? 0) / qty}`,
+      stueck: stueckStr,
+      stueckVerkauf: stueckVerkaufStr,
+      kaufStueckpreis: trade.kaufStueckpreis !== undefined ? `${trade.kaufStueckpreis}` : `${(trade.kaufPreis ?? 0) / buyQty}`,
       kaufTransaktionManuell: trade.kaufTransaktionManuell !== undefined ? `${trade.kaufTransaktionManuell}` : "",
       kaufGebuehren: `${trade.kaufGebuehren ?? appSettings.defaultBuyFees ?? 0}`,
       kaufPreisManuell: trade.kaufPreisManuell !== undefined ? `${trade.kaufPreisManuell}` : "",
       verkaufszeitpunkt: toLocalInputValue(trade.verkaufszeitpunkt),
-      verkaufStueckpreis: trade.verkaufStueckpreis !== undefined ? `${trade.verkaufStueckpreis}` : trade.verkaufPreis !== undefined ? `${trade.verkaufPreis / qty}` : "",
+      verkaufStueckpreis:
+        trade.verkaufStueckpreis !== undefined
+          ? `${trade.verkaufStueckpreis}`
+          : trade.verkaufPreis !== undefined
+            ? `${trade.verkaufPreis / sellQtyForPreis}`
+            : "",
       verkaufTransaktionManuell: trade.verkaufTransaktionManuell !== undefined ? `${trade.verkaufTransaktionManuell}` : "",
-      verkaufSteuern: `${trade.verkaufSteuern ?? ""}`,
+      verkaufSteuern:
+        trade.typ === "Steuerkorrektur" && trade.verkaufSteuern !== undefined && Number.isFinite(trade.verkaufSteuern)
+          ? formatDecimalForForm(trade.verkaufSteuern, appSettings.language === "en" ? "en" : "de")
+          : `${trade.verkaufSteuern ?? ""}`,
       verkaufGebuehren: `${trade.verkaufGebuehren ?? appSettings.defaultSellFees ?? 0}`,
       verkaufPreisManuell: trade.verkaufPreisManuell !== undefined ? `${trade.verkaufPreisManuell}` : ""
     });
@@ -1506,6 +1630,15 @@ export default function App() {
             showMarketPulse={appSettings.showMarketPulse}
           />
         )}
+        {view === "bookings" && (
+          <BookingsView
+            rows={allBookingRows}
+            trades={trades}
+            language={appSettings.language}
+            weekStartsOn={appSettings.weekStartsOn}
+            onEditTrade={editTrade}
+          />
+        )}
         {view === "trades" && (
           <TradesView
             filteredTrades={filteredTrades}
@@ -1581,6 +1714,8 @@ export default function App() {
             onSaveNewTrade={saveNewTrade}
             onSetViewTrades={() => setView("trades")}
             onCancelNewTradeView={cancelNewTradeView}
+            bookingDraft={bookingDraft}
+            onBookingDraftChange={setBookingDraft}
           />
         )}
         {view === "assets" && (

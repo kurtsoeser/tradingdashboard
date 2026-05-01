@@ -1,8 +1,9 @@
-import type { Trade } from "../types/trade";
+import type { Trade, TradeStatus } from "../types/trade";
 
 export type View =
   | "dashboard"
   | "trades"
+  | "bookings"
   | "newTrade"
   | "assets"
   | "analytics"
@@ -49,7 +50,10 @@ export interface NewTradeForm {
   wkn: string;
   notiz: string;
   kaufzeitpunkt: string;
+  /** Stückzahl Kauf (Kaufdaten-Kachel). */
   stueck: string;
+  /** Stückzahl Verkauf (Verkaufsdaten-Kachel); bei Bearbeitung mit Buchungen = Summe SELL-Mengen. */
+  stueckVerkauf: string;
   kaufStueckpreis: string;
   kaufTransaktionManuell: string;
   kaufGebuehren: string;
@@ -60,6 +64,8 @@ export interface NewTradeForm {
   verkaufSteuern: string;
   verkaufGebuehren: string;
   verkaufPreisManuell: string;
+  /** Nur normale Trades (nicht Dividende/Zins/Steuerkorrektur): explizit offen oder geschlossen. */
+  tradeStatus: TradeStatus;
 }
 
 export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
@@ -72,6 +78,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
     notiz: "",
     kaufzeitpunkt: "",
     stueck: "",
+    stueckVerkauf: "",
     kaufStueckpreis: "",
     kaufTransaktionManuell: "",
     kaufGebuehren: "",
@@ -82,6 +89,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
     verkaufSteuern: "",
     verkaufGebuehren: "",
     verkaufPreisManuell: "",
+    tradeStatus: "Offen",
     ...overrides
   };
 }

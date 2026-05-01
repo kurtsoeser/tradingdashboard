@@ -375,6 +375,89 @@ button.primary {
   min-height: 0;
 }
 
+.trade-cloud-bookings-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.trade-cloud-bookings-card .trade-cloud-bookings-table {
+  font-size: 0.9rem;
+}
+
+.trade-cloud-bookings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.trade-cloud-bookings-table .booking-num-input,
+.trade-cloud-bookings-table .booking-datetime-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 11rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  background: #151518;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.trade-cloud-bookings-table .booking-num-input:focus,
+.trade-cloud-bookings-table .booking-datetime-input:focus {
+  outline: none;
+  border-color: #5a5a64;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.trade-cloud-bookings-table .booking-dt-row {
+  min-width: 0;
+}
+
+.trade-cloud-bookings-table .booking-dt-row .booking-datetime-input {
+  max-width: none;
+  min-width: 10.5rem;
+}
+
+.tax-correction-flow {
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tax-correction-intro {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.tax-correction-card .tax-correction-grid {
+  gap: 12px;
+}
+
+.tax-correction-amount-hint,
+.tax-correction-switch-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.tax-correction-notes textarea {
+  min-height: 88px;
+}
+
+.tax-correction-hint-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .new-trade-notes-card textarea {
   flex: 1;
   min-height: 160px;
@@ -2161,6 +2244,17 @@ button.dashboard-link-card:hover {
 
 [data-theme="light"] .card {
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
+}
+
+[data-theme="light"] .trade-cloud-bookings-table .booking-num-input,
+[data-theme="light"] .trade-cloud-bookings-table .booking-datetime-input {
+  background: #fbfbfd;
+}
+
+[data-theme="light"] .trade-cloud-bookings-table .booking-num-input:focus,
+[data-theme="light"] .trade-cloud-bookings-table .booking-datetime-input:focus {
+  border-color: #b8b8c4;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
 [data-theme="light"] .form-grid input,
@@ -4130,6 +4224,20 @@ td.action-col {
 
 .journal-week-table tbody tr:hover td {
   background: rgba(103, 103, 113, 0.08);
+}
+
+.bookings-all-table th.bookings-num-col,
+.bookings-all-table td.bookings-num-col {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bookings-all-table .booking-leg-code {
+  font-size: 11px;
+}
+
+.bookings-all-table tbody tr.bookings-row-open {
+  cursor: pointer;
 }
 
 .journal-week-col-icon {

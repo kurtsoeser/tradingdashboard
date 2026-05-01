@@ -1,0 +1,22 @@
+-- =============================================================================
+-- Verwaiste user_positions (optional, manuell)
+-- =============================================================================
+-- Die App entfernt beim Cloud-Speichern alle Positionen, deren legacy_trade_id
+-- nicht mehr im Snapshot vorkommt. Ein separates SQL ist meist nicht nötig.
+--
+-- Früher: Abgleich mit user_trades — die Tabelle wird von der App nicht mehr
+-- befüllt (Positions-only). Ein DELETE mit NOT EXISTS user_trades würde daher
+-- fälschlich alle Positionen mit gesetztem legacy_trade_id löschen.
+--
+-- Bei Bedarf nur gezielt prüfen, z. B. doppelte legacy_trade_id (sollte durch
+-- Unique-Index nicht vorkommen) oder Zeilen ohne Buchungen.
+-- =============================================================================
+
+-- Beispiel: Vorschau Positionen ohne einzige Transaktion (an user_id anpassen)
+-- SELECT p.position_id, p.legacy_trade_id, p.name, p.typ
+-- FROM public.user_positions p
+-- WHERE p.user_id = '00000000-0000-0000-0000-000000000000'::uuid
+--   AND NOT EXISTS (
+--     SELECT 1 FROM public.user_position_transactions t
+--     WHERE t.user_id = p.user_id AND t.position_id = p.position_id
+--   );
