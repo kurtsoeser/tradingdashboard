@@ -527,7 +527,8 @@ const de: Dict = {
   journalWeekPlaceholder: "Markdown: # Überschrift, **fett**, Tabellen mit | … |, - [ ] Aufgaben …",
   journalDayPlaceholder: "Markdown für Tagesnotizen, Links, Checklisten …",
   journalMonthPlaceholder: "Monatsnotizen, Fokus-Themen, Review, wiederkehrende Regeln …",
-  journalBlurHint: "Speichern: Fokus aus dem Textfeld nehmen (z. B. woanders klicken).",
+  journalBlurHint:
+    "Speichert automatisch nach kurzer Pause; beim Tab-Wechsel oder Verlassen des Feldes sofort. So gelangt der Text zuverlässig in die Cloud.",
   journalBelongsToWeek: "Dieses Datum liegt in KW {week} ({year}).",
   journalOpenWeek: "Im Tab „Kalenderwoche“ öffnen",
   journalMdEditPencilAria: "Notizen bearbeiten",
@@ -1369,7 +1370,8 @@ const en: Dict = {
   journalWeekPlaceholder: "Markdown: # heading, **bold**, tables with | … |, - [ ] tasks…",
   journalDayPlaceholder: "Markdown for daily notes, links, checklists…",
   journalMonthPlaceholder: "Monthly notes, focus topics, review, recurring rules…",
-  journalBlurHint: "To save: leave the text field (e.g. click elsewhere).",
+  journalBlurHint:
+    "Saves automatically after a short pause; also when you leave the field or switch tabs, so text reliably reaches the cloud.",
   journalBelongsToWeek: "This date is in week {week} ({year}).",
   journalOpenWeek: "Open in the “Week” tab",
   journalMdEditPencilAria: "Edit notes",

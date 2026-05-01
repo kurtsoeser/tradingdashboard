@@ -1,5 +1,5 @@
 import { BookMarked, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppSettings } from "../../app/settings";
 import { t } from "../../app/i18n";
 import type { JournalData } from "../../lib/journalStorage";
@@ -20,6 +20,8 @@ import { JournalMonthTradesPanel } from "../JournalMonthTradesPanel";
 import { JournalAiReportPanel } from "../JournalAiReportPanel";
 import { JournalWeekTradesPanel } from "../JournalWeekTradesPanel";
 import type { Trade } from "../../types/trade";
+
+const JOURNAL_AUTOSAVE_MS = 550;
 
 interface JournalViewProps {
   language: AppSettings["language"];
@@ -52,6 +54,46 @@ export function JournalView({
   const [draftMonth, setDraftMonth] = useState("");
   const [aiReportOpen, setAiReportOpen] = useState(false);
 
+  const flushJournalDraftsRef = useRef({
+    weekKey,
+    dayYmd,
+    monthYm,
+    draftWeek,
+    draftDay,
+    draftMonth,
+    journalData,
+    onJournalWeekChange,
+    onJournalDayChange,
+    onJournalMonthChange
+  });
+  flushJournalDraftsRef.current = {
+    weekKey,
+    dayYmd,
+    monthYm,
+    draftWeek,
+    draftDay,
+    draftMonth,
+    journalData,
+    onJournalWeekChange,
+    onJournalDayChange,
+    onJournalMonthChange
+  };
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "hidden") return;
+      const c = flushJournalDraftsRef.current;
+      const pw = c.journalData.byWeek[c.weekKey] ?? "";
+      if (c.draftWeek !== pw) c.onJournalWeekChange(c.weekKey, c.draftWeek);
+      const pd = c.journalData.byDay[c.dayYmd] ?? "";
+      if (c.draftDay !== pd) c.onJournalDayChange(c.dayYmd, c.draftDay);
+      const pm = c.journalData.byMonth[c.monthYm] ?? "";
+      if (c.draftMonth !== pm) c.onJournalMonthChange(c.monthYm, c.draftMonth);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   useEffect(() => {
     setDraftWeek(journalData.byWeek[weekKey] ?? "");
   }, [weekKey, journalData.byWeek]);
@@ -76,14 +118,6 @@ export function JournalView({
         })()
       : "";
 
-  const shiftWeek = (delta: number) => {
-    const p = parseIsoWeekKey(weekKey);
-    if (!p) return;
-    const mon = mondayOfIsoWeek(p.isoYear, p.week);
-    const next = addDaysLocal(mon, delta * 7);
-    setWeekKey(toIsoWeekKey(next));
-  };
-
   const persistWeekIfChanged = () => {
     const prev = journalData.byWeek[weekKey] ?? "";
     if (draftWeek !== prev) onJournalWeekChange(weekKey, draftWeek);
@@ -99,10 +133,60 @@ export function JournalView({
     if (draftMonth !== prev) onJournalMonthChange(monthYm, draftMonth);
   };
 
-  const goThisWeek = () => setWeekKey(toIsoWeekKey(new Date()));
-  const goToday = () => setDayYmd(toLocalYmd(new Date()));
+  const setModeFlushing = (next: "week" | "day" | "month") => {
+    if (mode === "week") persistWeekIfChanged();
+    else if (mode === "day") persistDayIfChanged();
+    else persistMonthIfChanged();
+    setMode(next);
+  };
+
+  const journalWeekStored = journalData.byWeek[weekKey] ?? "";
+  useEffect(() => {
+    if (draftWeek === journalWeekStored) return;
+    const id = window.setTimeout(() => {
+      onJournalWeekChange(weekKey, draftWeek);
+    }, JOURNAL_AUTOSAVE_MS);
+    return () => window.clearTimeout(id);
+  }, [draftWeek, weekKey, journalWeekStored, onJournalWeekChange]);
+
+  const journalDayStored = journalData.byDay[dayYmd] ?? "";
+  useEffect(() => {
+    if (draftDay === journalDayStored) return;
+    const id = window.setTimeout(() => {
+      onJournalDayChange(dayYmd, draftDay);
+    }, JOURNAL_AUTOSAVE_MS);
+    return () => window.clearTimeout(id);
+  }, [draftDay, dayYmd, journalDayStored, onJournalDayChange]);
+
+  const journalMonthStored = journalData.byMonth[monthYm] ?? "";
+  useEffect(() => {
+    if (draftMonth === journalMonthStored) return;
+    const id = window.setTimeout(() => {
+      onJournalMonthChange(monthYm, draftMonth);
+    }, JOURNAL_AUTOSAVE_MS);
+    return () => window.clearTimeout(id);
+  }, [draftMonth, monthYm, journalMonthStored, onJournalMonthChange]);
+
+  const shiftWeek = (delta: number) => {
+    persistWeekIfChanged();
+    const p = parseIsoWeekKey(weekKey);
+    if (!p) return;
+    const mon = mondayOfIsoWeek(p.isoYear, p.week);
+    const next = addDaysLocal(mon, delta * 7);
+    setWeekKey(toIsoWeekKey(next));
+  };
+
+  const goThisWeek = () => {
+    persistWeekIfChanged();
+    setWeekKey(toIsoWeekKey(new Date()));
+  };
+  const goToday = () => {
+    persistDayIfChanged();
+    setDayYmd(toLocalYmd(new Date()));
+  };
 
   const shiftDay = (delta: number) => {
+    persistDayIfChanged();
     const d = parseLocalYmd(dayYmd);
     if (!d) return;
     setDayYmd(toLocalYmd(addDaysLocal(d, delta)));
@@ -119,11 +203,15 @@ export function JournalView({
   };
   const toYm = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const shiftMonth = (delta: number) => {
+    persistMonthIfChanged();
     const d = parseYmToDate(monthYm);
     if (!d) return;
     setMonthYm(toYm(new Date(d.getFullYear(), d.getMonth() + delta, 1)));
   };
-  const goCurrentMonth = () => setMonthYm(toYm(new Date()));
+  const goCurrentMonth = () => {
+    persistMonthIfChanged();
+    setMonthYm(toYm(new Date()));
+  };
 
   const dayParsed = parseLocalYmd(dayYmd);
   const dayHeading =
@@ -153,13 +241,13 @@ export function JournalView({
       />
 
       <div className="analytics-tabbar journal-tabbar">
-        <button type="button" className={mode === "month" ? "secondary active" : "secondary"} onClick={() => setMode("month")}>
+        <button type="button" className={mode === "month" ? "secondary active" : "secondary"} onClick={() => setModeFlushing("month")}>
           {t(language, "journalTabMonth")}
         </button>
-        <button type="button" className={mode === "week" ? "secondary active" : "secondary"} onClick={() => setMode("week")}>
+        <button type="button" className={mode === "week" ? "secondary active" : "secondary"} onClick={() => setModeFlushing("week")}>
           {t(language, "journalTabWeek")}
         </button>
-        <button type="button" className={mode === "day" ? "secondary active" : "secondary"} onClick={() => setMode("day")}>
+        <button type="button" className={mode === "day" ? "secondary active" : "secondary"} onClick={() => setModeFlushing("day")}>
           {t(language, "journalTabDay")}
         </button>
       </div>
@@ -226,7 +314,15 @@ export function JournalView({
             <div className="journal-day-row">
               <label className="journal-date-label">
                 {t(language, "journalPickDay")}
-                <input type="date" className="journal-date-input" value={dayYmd} onChange={(e) => setDayYmd(e.target.value)} />
+                <input
+                  type="date"
+                  className="journal-date-input"
+                  value={dayYmd}
+                  onChange={(e) => {
+                    persistDayIfChanged();
+                    setDayYmd(e.target.value);
+                  }}
+                />
               </label>
               <button type="button" className="secondary" onClick={goToday}>
                 {t(language, "journalToday")}
@@ -242,6 +338,7 @@ export function JournalView({
                   type="button"
                   className="journal-inline-link"
                   onClick={() => {
+                    persistDayIfChanged();
                     setWeekKey(`${weekMeta.isoYear}-W${String(weekMeta.week).padStart(2, "0")}`);
                     setMode("week");
                   }}
@@ -291,7 +388,15 @@ export function JournalView({
             <div className="journal-day-row">
               <label className="journal-date-label">
                 {t(language, "journalPickMonth")}
-                <input type="month" className="journal-date-input" value={monthYm} onChange={(e) => setMonthYm(e.target.value)} />
+                <input
+                  type="month"
+                  className="journal-date-input"
+                  value={monthYm}
+                  onChange={(e) => {
+                    persistMonthIfChanged();
+                    setMonthYm(e.target.value);
+                  }}
+                />
               </label>
               <button type="button" className="secondary" onClick={goCurrentMonth}>
                 {t(language, "journalThisMonth")}
