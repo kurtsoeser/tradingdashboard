@@ -24,6 +24,10 @@ interface TradesViewProps {
   onSearchChange: (value: string) => void;
   statusFilter: "Alle" | Trade["status"];
   onStatusFilterChange: (value: "Alle" | Trade["status"]) => void;
+  checkedFilter: "Alle" | "Gecheckt" | "Offen";
+  onCheckedFilterChange: (value: "Alle" | "Gecheckt" | "Offen") => void;
+  sourceFilter: "Alle" | Trade["sourceBroker"];
+  onSourceFilterChange: (value: "Alle" | Trade["sourceBroker"]) => void;
   typFilter: string[];
   onTypFilterChange: (value: string[]) => void;
   basiswertFilter: string[];
@@ -33,6 +37,7 @@ interface TradesViewProps {
   onResetFilters: () => void;
   availableTypes: string[];
   availableBasiswerte: string[];
+  availableSources: Trade["sourceBroker"][];
   sortMarker: (field: TradesSortField) => string;
   onToggleSort: (field: TradesSortField) => void;
   onImportTradesFile: (file: File) => Promise<void>;
@@ -43,6 +48,7 @@ interface TradesViewProps {
   onExportTradesDbExcel: () => void;
   onGoToNewTrade: () => void;
   onEditTrade: (trade: Trade) => void;
+  onToggleTradeManualChecked: (tradeId: string, checked: boolean) => void;
   onDeleteTrade: (id: string) => void;
   calendarMonthLabel: string;
   onCalendarPrevMonth: () => void;
@@ -71,6 +77,7 @@ export function TradesView(props: TradesViewProps) {
   const toDateKey = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
   const [copyFeedback, setCopyFeedback] = useState<"idle" | "ok" | "error">("idle");
+  const checkedCount = useMemo(() => props.trades.filter((trade) => !!trade.manualChecked).length, [props.trades]);
 
   const columnPrefsKey = TRADES_COLUMN_PREFS_STORAGE_KEY;
   const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
@@ -80,6 +87,8 @@ export function TradesView(props: TradesViewProps) {
   ];
   type ColumnId =
     | "status"
+    | "manualChecked"
+    | "source"
     | "kaufzeitpunkt"
     | "verkaufszeitpunkt"
     | "name"
@@ -99,6 +108,8 @@ export function TradesView(props: TradesViewProps) {
 
   const defaultVisible: Record<ColumnId, boolean> = {
     status: true,
+    manualChecked: true,
+    source: true,
     kaufzeitpunkt: true,
     verkaufszeitpunkt: true,
     name: true,
@@ -119,6 +130,8 @@ export function TradesView(props: TradesViewProps) {
 
   const defaultOrder: ColumnId[] = [
     "status",
+    "manualChecked",
+    "source",
     "kaufzeitpunkt",
     "verkaufszeitpunkt",
     "name",
@@ -171,6 +184,11 @@ export function TradesView(props: TradesViewProps) {
   }, [columnOrder, visibleById]);
 
   const alwaysVisible = useMemo(() => new Set<ColumnId>(["status", "action"]), []);
+  const sourceLabel = (source?: Trade["sourceBroker"]) => {
+    if (!source) return "MANUAL";
+    if (source === "TRADE_REPUBLIC") return "Trade Republic";
+    return source;
+  };
 
   const columnDefs = (() => {
     const defs: Record<ColumnId, any> = {
@@ -182,6 +200,27 @@ export function TradesView(props: TradesViewProps) {
         render: (trade: Trade) => (
           <>{isTradeClosed(trade) ? <CheckCircle2 size={16} className="status-icon closed" /> : <Circle size={16} className="status-icon open" />}</>
         )
+      },
+      manualChecked: {
+        id: "manualChecked" satisfies ColumnId,
+        label: t(props.language, "manualCheckedShort"),
+        visible: true,
+        draggable: true,
+        render: (trade: Trade) => (
+          <input
+            type="checkbox"
+            checked={!!trade.manualChecked}
+            title={t(props.language, "manualChecked")}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => props.onToggleTradeManualChecked(trade.id, e.target.checked)}
+          />
+        )
+      },
+      source: {
+        id: "source" satisfies ColumnId,
+        label: t(props.language, "source"),
+        draggable: true,
+        render: (trade: Trade) => sourceLabel(trade.sourceBroker)
       },
       kaufzeitpunkt: {
         id: "kaufzeitpunkt" satisfies ColumnId,
@@ -335,6 +374,10 @@ export function TradesView(props: TradesViewProps) {
         return isTradeClosed(trade) ? t(props.language, "closed") : t(props.language, "open");
       case "kaufzeitpunkt":
         return formatDateTimeAT(trade.kaufzeitpunkt);
+      case "manualChecked":
+        return trade.manualChecked ? "✓" : "—";
+      case "source":
+        return sourceLabel(trade.sourceBroker);
       case "verkaufszeitpunkt":
         return formatDateTimeAT(["Steuerkorrektur", "Dividende", "Zinszahlung"].includes(trade.typ) ? trade.kaufzeitpunkt : trade.verkaufszeitpunkt);
       case "name":
@@ -611,6 +654,15 @@ export function TradesView(props: TradesViewProps) {
           </h3>
           <div className="value negative">{props.tradesSummary.losers}</div>
         </div>
+        <div className="card">
+          <h3>
+            <CheckCircle2 size={14} />
+            {t(props.language, "manualCheckedProgress")}
+          </h3>
+          <div className="value">
+            {checkedCount} / {props.trades.length}
+          </div>
+        </div>
       </section>
 
       <div className="trades-summary-grid trades-summary-grid-spaced">
@@ -693,6 +745,31 @@ export function TradesView(props: TradesViewProps) {
                       {value}
                     </option>
                   ))}
+                </select>
+              </label>
+              <label>
+                {t(props.language, "source")}
+                <select
+                  value={props.sourceFilter}
+                  onChange={(event) => props.onSourceFilterChange(event.target.value as "Alle" | Trade["sourceBroker"])}
+                >
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  {props.availableSources.map((source) => (
+                    <option key={source} value={source}>
+                      {sourceLabel(source)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t(props.language, "manualChecked")}
+                <select
+                  value={props.checkedFilter}
+                  onChange={(event) => props.onCheckedFilterChange(event.target.value as "Alle" | "Gecheckt" | "Offen")}
+                >
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="Gecheckt">{t(props.language, "manualCheckedDone")}</option>
+                  <option value="Offen">{t(props.language, "manualCheckedTodo")}</option>
                 </select>
               </label>
               <label>

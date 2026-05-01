@@ -64,6 +64,24 @@ export function ErtragEingabeEditor({
           </label>
 
           <label className="field-span-full">
+            <span className="field-title">{t(language, "source")}</span>
+            <select
+              value={form.sourceBroker}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  sourceBroker: e.target.value as "TRADE_REPUBLIC" | "N26" | "BAWAG" | "MANUAL"
+                }))
+              }
+            >
+              <option value="MANUAL">Manuell</option>
+              <option value="TRADE_REPUBLIC">Trade Republic</option>
+              <option value="N26">N26</option>
+              <option value="BAWAG">BAWAG</option>
+            </select>
+          </label>
+
+          <label className="field-span-full">
             <span className="field-title">{t(language, basisLabelKey)}</span>
             <input
               value={form.basiswert}

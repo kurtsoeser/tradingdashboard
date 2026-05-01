@@ -46,6 +46,7 @@ export interface AssetDisplayRow extends AssetRow {
 export interface NewTradeForm {
   name: string;
   typ: TradeFormType;
+  sourceBroker: NonNullable<Trade["sourceBroker"]>;
   basiswert: string;
   isin: string;
   wkn: string;
@@ -73,6 +74,7 @@ export function defaultForm(overrides?: Partial<NewTradeForm>): NewTradeForm {
   return {
     name: "",
     typ: "Long",
+    sourceBroker: "MANUAL",
     basiswert: "",
     isin: "",
     wkn: "",

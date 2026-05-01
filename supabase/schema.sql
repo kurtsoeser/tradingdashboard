@@ -35,6 +35,7 @@ create table if not exists public.user_positions (
   isin text,
   wkn text,
   notiz text,
+  manual_checked boolean not null default false,
   opened_at timestamptz not null default now(),
   closed_at timestamptz,
   status text not null default 'OPEN' check (status in ('OPEN', 'CLOSED')),
@@ -44,7 +45,8 @@ create table if not exists public.user_positions (
 );
 
 alter table public.user_positions
-  add column if not exists legacy_trade_id text;
+  add column if not exists legacy_trade_id text,
+  add column if not exists manual_checked boolean not null default false;
 
 create unique index if not exists user_positions_legacy_trade_idx
   on public.user_positions (user_id, legacy_trade_id);

@@ -32,6 +32,8 @@ export interface TradePositionBooking {
 
 export interface Trade {
   id: string;
+  /** Manueller QA-Haken: Trade + zugehörige Buchungen wurden geprüft. */
+  manualChecked?: boolean;
   sourceBroker?: "TRADE_REPUBLIC" | "N26" | "BAWAG" | "MANUAL";
   sourceAccount?: string;
   externalEventId?: string;

@@ -37,6 +37,8 @@ export interface AppSettings {
    * (Ohne Login-Automation; nur Suche/Portal-Links.)
    */
   traderProviders: TraderProviderId[];
+  /** IDs von Trades, die manuell geprüft/abgehakt wurden. */
+  manualCheckedTradeIds: string[];
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -60,7 +62,8 @@ export const defaultAppSettings: AppSettings = {
   aiBackendUrl: "",
   aiGeminiGoogleSearchGrounding: false,
 
-  traderProviders: ["trade-republic"]
+  traderProviders: ["trade-republic"],
+  manualCheckedTradeIds: []
 };
 
 export function readStoredAppSettings(): AppSettings {

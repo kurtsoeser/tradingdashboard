@@ -80,6 +80,7 @@ function fromNullable<T>(value: T | null): T | undefined {
 interface DbPositionRow {
   position_id: string;
   legacy_trade_id?: string | null;
+  manual_checked?: boolean | null;
   source_broker?: string | null;
   source_account?: string | null;
   name: string;
@@ -220,6 +221,7 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
         const bookedRaw = inc?.booked_at ?? position.opened_at;
         return {
           id: stableTradeId,
+          manualChecked: !!position.manual_checked,
           sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
           sourceAccount: position.source_account ?? undefined,
           name: position.name,
@@ -252,6 +254,7 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
       if (position.typ === "Steuerkorrektur") {
         return {
           id: stableTradeId,
+          manualChecked: !!position.manual_checked,
           sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
           sourceAccount: position.source_account ?? undefined,
           name: position.name,
@@ -275,6 +278,7 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
 
       return {
         id: stableTradeId,
+        manualChecked: !!position.manual_checked,
         sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
         sourceAccount: position.source_account ?? undefined,
         name: position.name,
@@ -785,6 +789,7 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
       opened_at: openedIso,
       closed_at: closedIso,
       status: trade.status === "Geschlossen" ? "CLOSED" : "OPEN",
+      manual_checked: !!trade.manualChecked,
       legacy_trade_id: trade.id
     };
   });

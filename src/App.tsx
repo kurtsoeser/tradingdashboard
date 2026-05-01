@@ -167,6 +167,8 @@ export default function App() {
   const newTradeDraftIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
+  const [checkedFilter, setCheckedFilter] = useState<"Alle" | "Gecheckt" | "Offen">("Alle");
+  const [sourceFilter, setSourceFilter] = useState<"Alle" | Trade["sourceBroker"]>("Alle");
   const [typFilter, setTypFilter] = useState<string[]>([]);
   const [basiswertFilter, setBasiswertFilter] = useState<string[]>([]);
   const [rangeFilter, setRangeFilter] = useState<"Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365">("Alle");
@@ -361,13 +363,20 @@ export default function App() {
             normalizedFromRemote.length === 0 && localBackup.length > 0
               ? normalizeTradesOnLoad(localBackup).trades
               : normalizedFromRemote;
+          const legacyCheckedIds = new Set<string>(
+            Array.isArray(remote.appSettings?.manualCheckedTradeIds) ? remote.appSettings.manualCheckedTradeIds : []
+          );
+          const hydratedTrades = normalizedTrades.map((trade) => ({
+            ...trade,
+            manualChecked: !!trade.manualChecked || legacyCheckedIds.has(trade.id)
+          }));
           if (normalizedFromRemote.length === 0 && localBackup.length > 0) {
             console.warn(
               "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
             );
           }
-          setTrades(normalizedTrades);
-          saveTradesToStorage(normalizedTrades);
+          setTrades(hydratedTrades);
+          saveTradesToStorage(hydratedTrades);
           setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
           saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
           setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
@@ -444,17 +453,26 @@ export default function App() {
   const analyticsData = useMemo(() => buildAnalyticsData(trades), [trades]);
   const availableTypes = useMemo(() => [...new Set(trades.map((trade) => trade.typ).filter(Boolean))], [trades]);
   const availableBasiswerte = useMemo(() => [...new Set(trades.map((trade) => trade.basiswert).filter(Boolean))], [trades]);
+  const availableSources = useMemo(
+    () => [...new Set(trades.map((trade) => trade.sourceBroker).filter((s): s is NonNullable<Trade["sourceBroker"]> => Boolean(s)))],
+    [trades]
+  );
 
   const baseFilteredTrades = useMemo(() => {
     const searchNormalized = search.trim().toLowerCase();
     return trades.filter((trade) => {
       const matchesSearch = !searchNormalized || trade.name.toLowerCase().includes(searchNormalized) || trade.basiswert.toLowerCase().includes(searchNormalized);
       const matchesStatus = statusFilter === "Alle" || trade.status === statusFilter;
+      const matchesChecked =
+        checkedFilter === "Alle" ||
+        (checkedFilter === "Gecheckt" && !!trade.manualChecked) ||
+        (checkedFilter === "Offen" && !trade.manualChecked);
       const matchesTyp = typFilter.length === 0 || typFilter.includes(trade.typ);
+      const matchesSource = sourceFilter === "Alle" || trade.sourceBroker === sourceFilter;
       const matchesBasiswert = basiswertFilter.length === 0 || basiswertFilter.includes(trade.basiswert);
-      return matchesSearch && matchesStatus && matchesTyp && matchesBasiswert;
+      return matchesSearch && matchesStatus && matchesChecked && matchesTyp && matchesSource && matchesBasiswert;
     });
-  }, [trades, search, statusFilter, typFilter, basiswertFilter]);
+  }, [trades, search, statusFilter, checkedFilter, typFilter, sourceFilter, basiswertFilter]);
 
   const getTradeDateKeys = (trade: Trade): string[] => {
     const keys = new Set<string>();
@@ -1181,6 +1199,8 @@ export default function App() {
 
     const nextBase: Trade = {
       id: effectiveId,
+      manualChecked: false,
+      sourceBroker: form.sourceBroker,
       name: form.name.trim(),
       typ: form.typ,
       basiswert: isNoBasiswertType ? "" : canonicalizeBasiswert(form.basiswert.trim()),
@@ -1248,7 +1268,9 @@ export default function App() {
         : undefined;
       const next: Trade = bookingsForTrade ? { ...nextBase, bookings: bookingsForTrade } : nextBase;
       const exists = prev.some((trade) => trade.id === effectiveId);
-      const updated = exists ? prev.map((trade) => (trade.id === effectiveId ? next : trade)) : [next, ...prev];
+      const updated = exists
+        ? prev.map((trade) => (trade.id === effectiveId ? { ...next, manualChecked: !!trade.manualChecked } : trade))
+        : [next, ...prev];
       saveTradesToStorage(updated);
       return updated;
     });
@@ -1375,6 +1397,7 @@ export default function App() {
       external_event_id: trade.externalEventId ?? "",
       name: trade.name,
       typ: trade.typ,
+      sourceBroker: trade.sourceBroker ?? "MANUAL",
       basiswert: trade.basiswert,
       isin: trade.isin ?? "",
       wkn: trade.wkn ?? "",
@@ -1516,6 +1539,13 @@ export default function App() {
       setBookingDraft([]);
     }
   };
+  const setTradeManualChecked = (tradeId: string, checked: boolean) => {
+    setTrades((prev) => {
+      const next = prev.map((trade) => (trade.id === tradeId ? { ...trade, manualChecked: checked } : trade));
+      saveTradesToStorage(next);
+      return next;
+    });
+  };
   const editTrade = (trade: Trade) => {
     newTradeDraftIdRef.current = null;
     const bookingSource =
@@ -1530,11 +1560,17 @@ export default function App() {
     if (trade.typ === "Dividende" || trade.typ === "Zinszahlung" || trade.typ === "Steuerkorrektur") {
       setBookingDraft([]);
     } else {
-      setBookingDraft(cloneBookings(bookingSource));
+      const sortedBookings = cloneBookings(bookingSource).sort((a, b) => {
+        const ta = parseStoredDateTime(a.bookedAtIso)?.getTime() ?? 0;
+        const tb = parseStoredDateTime(b.bookedAtIso)?.getTime() ?? 0;
+        return ta - tb;
+      });
+      setBookingDraft(sortedBookings);
     }
     setForm({
       name: trade.name,
       typ: trade.typ,
+      sourceBroker: trade.sourceBroker ?? "MANUAL",
       basiswert: trade.basiswert,
       isin: trade.isin ?? "",
       wkn: trade.wkn ?? "",
@@ -1627,6 +1663,8 @@ export default function App() {
   const resetTradesFilters = () => {
     setSearch("");
     setStatusFilter("Alle");
+    setCheckedFilter("Alle");
+    setSourceFilter("Alle");
     setTypFilter([]);
     setBasiswertFilter([]);
     setRangeFilter("Alle");
@@ -1786,6 +1824,7 @@ export default function App() {
             language={appSettings.language}
             weekStartsOn={appSettings.weekStartsOn}
             onEditTrade={editTrade}
+            onToggleTradeManualChecked={setTradeManualChecked}
             onExportBookingsFullExcel={exportBookingsFullExcel}
             onExportBookingsDbExcel={exportBookingsDbImportReadyExcel}
             onCommitBookingsImport={commitBookingsImport}
@@ -1801,6 +1840,10 @@ export default function App() {
             onSearchChange={setSearch}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
+            checkedFilter={checkedFilter}
+            onCheckedFilterChange={setCheckedFilter}
+            sourceFilter={sourceFilter}
+            onSourceFilterChange={setSourceFilter}
             typFilter={typFilter}
             onTypFilterChange={setTypFilter}
             basiswertFilter={basiswertFilter}
@@ -1814,6 +1857,7 @@ export default function App() {
             onResetFilters={resetTradesFilters}
             availableTypes={availableTypes}
             availableBasiswerte={availableBasiswerte}
+            availableSources={availableSources}
             sortMarker={sortMarker}
             onToggleSort={toggleSort}
             onImportTradesFile={importTradesFile}
@@ -1824,6 +1868,7 @@ export default function App() {
             onExportTradesDbExcel={exportTradesDbImportReadyExcel}
             onGoToNewTrade={startNewTrade}
             onEditTrade={editTrade}
+            onToggleTradeManualChecked={setTradeManualChecked}
             onDeleteTrade={deleteTrade}
             calendarMonthLabel={calendarMonthLabel}
             onCalendarPrevMonth={() => setCalendarMonth(new Date(currentCalendarYear, currentCalendarMonth - 1, 1))}
@@ -1863,6 +1908,7 @@ export default function App() {
         {view === "newTrade" && (
           <NewTradeView
             editingTradeId={editingTradeId}
+            editingTradeManualChecked={editingTradeId ? !!trades.find((trade) => trade.id === editingTradeId)?.manualChecked : false}
             language={appSettings.language}
             financeService={appSettings.financeService}
             trades={trades}
@@ -1878,6 +1924,10 @@ export default function App() {
             haltedauer={haltedauer}
             canSaveTrade={canSaveTrade}
             onSaveNewTrade={saveNewTrade}
+            onSetEditingTradeManualChecked={(checked) => {
+              if (!editingTradeId) return;
+              setTradeManualChecked(editingTradeId, checked);
+            }}
             onSetViewTrades={() => setView("trades")}
             onCancelNewTradeView={cancelNewTradeView}
             bookingDraft={bookingDraft}

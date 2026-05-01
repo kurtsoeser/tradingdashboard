@@ -8,6 +8,7 @@ export interface FlatBookingRow {
   tradeTyp: string;
   basiswert: string;
   tradeStatus: Trade["status"];
+  tradeManualChecked: boolean;
   booking: TradePositionBooking;
 }
 
@@ -32,6 +33,7 @@ export function buildFlatBookingRows(trades: Trade[]): FlatBookingRow[] {
         tradeTyp: trade.typ,
         basiswert: trade.basiswert,
         tradeStatus: trade.status,
+        tradeManualChecked: !!trade.manualChecked,
         booking: b
       });
     });

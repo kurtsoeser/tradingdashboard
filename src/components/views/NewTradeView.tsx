@@ -51,6 +51,7 @@ function financeProviderLabel(language: AppSettings["language"], service: AppSet
 
 interface NewTradeViewProps {
   editingTradeId: string | null;
+  editingTradeManualChecked: boolean;
   language: AppSettings["language"];
   financeService: AppSettings["financeService"];
   trades: Trade[];
@@ -66,6 +67,7 @@ interface NewTradeViewProps {
   haltedauer: number;
   canSaveTrade: boolean;
   onSaveNewTrade: () => void;
+  onSetEditingTradeManualChecked: (checked: boolean) => void;
   onSetViewTrades: () => void;
   onCancelNewTradeView: () => void;
   bookingDraft: TradePositionBooking[];
@@ -74,6 +76,7 @@ interface NewTradeViewProps {
 
 export function NewTradeView({
   editingTradeId,
+  editingTradeManualChecked,
   language,
   financeService,
   trades,
@@ -89,11 +92,25 @@ export function NewTradeView({
   haltedauer,
   canSaveTrade,
   onSaveNewTrade,
+  onSetEditingTradeManualChecked,
   onSetViewTrades,
   onCancelNewTradeView,
   bookingDraft,
   onBookingDraftChange
 }: NewTradeViewProps) {
+  const normalizeDecimalInput = (value: string) => value.replace(/,/g, ".");
+
+  const sortBookingRowsByDateTimeAsc = (rows: TradePositionBooking[]): TradePositionBooking[] =>
+    [...rows].sort((a, b) => {
+      const ta = parseStoredDateTime(a.bookedAtIso)?.getTime() ?? 0;
+      const tb = parseStoredDateTime(b.bookedAtIso)?.getTime() ?? 0;
+      return ta - tb;
+    });
+
+  const updateBookingDraftSorted = (rows: TradePositionBooking[]) => {
+    onBookingDraftChange(sortBookingRowsByDateTimeAsc(rows));
+  };
+
   const formatDateTimeDisplay = (value: string) => {
     if (!value) return "";
     const date = new Date(value);
@@ -536,6 +553,16 @@ export function NewTradeView({
               <CandlestickChart size={14} />
               {t(language, "toTrades")}
             </button>
+            {editingTradeId ? (
+              <label className="header-inline-checkbox">
+                <input
+                  type="checkbox"
+                  checked={editingTradeManualChecked}
+                  onChange={(e) => onSetEditingTradeManualChecked(e.target.checked)}
+                />
+                <span>{t(language, "manualChecked")}</span>
+              </label>
+            ) : null}
             <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
               <Save size={14} />
               {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
@@ -612,6 +639,23 @@ export function NewTradeView({
                 <option value="Dividende">Dividende</option>
                 <option value="Zinszahlung">Zinszahlung</option>
                 <option value="Steuerkorrektur">Steuerkorrektur</option>
+              </select>
+            </label>
+            <label>
+              <span className="field-title">{t(language, "source")}</span>
+              <select
+                value={form.sourceBroker}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    sourceBroker: e.target.value as NonNullable<Trade["sourceBroker"]>
+                  }))
+                }
+              >
+                <option value="MANUAL">Manuell</option>
+                <option value="TRADE_REPUBLIC">Trade Republic</option>
+                <option value="N26">N26</option>
+                <option value="BAWAG">BAWAG</option>
               </select>
             </label>
             {!isNoBasiswertType && (
@@ -705,7 +749,7 @@ export function NewTradeView({
                               className="booking-datetime-input"
                               value={b.bookedAtDisplay?.trim() ? b.bookedAtDisplay : b.bookedAtIso ? formatDateTimeAT(b.bookedAtIso) : ""}
                               onChange={(e) =>
-                                onBookingDraftChange(
+                                updateBookingDraftSorted(
                                   bookingDraft.map((row, i) =>
                                     i === idx ? { ...row, bookedAtDisplay: e.target.value } : row
                                   )
@@ -713,7 +757,7 @@ export function NewTradeView({
                               }
                               onBlur={(e) => {
                                 const raw = e.target.value.trim();
-                                onBookingDraftChange(
+                                updateBookingDraftSorted(
                                   bookingDraft.map((row, i) => {
                                     if (i !== idx) return row;
                                     if (!raw) {
@@ -753,7 +797,7 @@ export function NewTradeView({
                               onClick={() => {
                                 const nowValue = getNowLocalDateTimeValue();
                                 const iso = new Date(nowValue).toISOString();
-                                onBookingDraftChange(
+                                updateBookingDraftSorted(
                                   bookingDraft.map((row, i) =>
                                     i === idx
                                       ? {
@@ -774,60 +818,71 @@ export function NewTradeView({
                           <>
                             <td>
                               <input
-                                type="number"
-                                min={0}
-                                step="any"
+                                type="text"
+                                inputMode="decimal"
                                 className="booking-num-input"
-                                value={b.qty ?? ""}
-                                onChange={(e) => {
-                                  const n = Number.parseFloat(e.target.value);
-                                  const qty = Number.isFinite(n) ? n : undefined;
+                                key={`qty-${rowKey}-${b.qty ?? ""}`}
+                                defaultValue={b.qty !== undefined && Number.isFinite(b.qty) ? formatDecimalForForm(b.qty, numberLocale) : ""}
+                                onBlur={(e) => {
+                                  const parsed = parseLocaleDecimal(e.target.value, numberLocale);
+                                  const qty = parsed !== null ? Math.max(0, parsed) : undefined;
                                   const unit = b.unitPrice ?? 0;
-                                  const gross =
-                                    qty !== undefined && Number.isFinite(unit) ? Math.round(qty * unit * 100) / 100 : 0;
-                                  onBookingDraftChange(
-                                    bookingDraft.map((row, i) =>
-                                      i === idx ? { ...row, qty, grossAmount: gross } : row
-                                    )
-                                  );
+                                  const gross = qty !== undefined && Number.isFinite(unit) ? Math.round(qty * unit * 100) / 100 : 0;
+                                  updateBookingDraftSorted(bookingDraft.map((row, i) => (i === idx ? { ...row, qty, grossAmount: gross } : row)));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
                                 }}
                               />
                             </td>
                             <td>
                               <input
-                                type="number"
-                                step="any"
+                                type="text"
+                                inputMode="decimal"
                                 className="booking-num-input"
-                                value={b.unitPrice ?? ""}
-                                onChange={(e) => {
-                                  const n = Number.parseFloat(e.target.value);
-                                  const unitPrice = Number.isFinite(n) ? n : undefined;
+                                key={`unit-${rowKey}-${b.unitPrice ?? ""}`}
+                                defaultValue={
+                                  b.unitPrice !== undefined && Number.isFinite(b.unitPrice)
+                                    ? formatDecimalForForm(b.unitPrice, numberLocale)
+                                    : ""
+                                }
+                                onBlur={(e) => {
+                                  const parsed = parseLocaleDecimal(e.target.value, numberLocale);
+                                  const unitPrice = parsed !== null ? parsed : undefined;
                                   const qty = b.qty ?? 0;
                                   const gross =
                                     unitPrice !== undefined && Number.isFinite(qty)
                                       ? Math.round(qty * unitPrice * 100) / 100
                                       : 0;
-                                  onBookingDraftChange(
-                                    bookingDraft.map((row, i) =>
-                                      i === idx ? { ...row, unitPrice, grossAmount: gross } : row
-                                    )
-                                  );
+                                  updateBookingDraftSorted(bookingDraft.map((row, i) => (i === idx ? { ...row, unitPrice, grossAmount: gross } : row)));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
                                 }}
                               />
                             </td>
                             <td>
                               <input
-                                type="number"
-                                step="any"
+                                type="text"
+                                inputMode="decimal"
                                 className="booking-num-input"
-                                value={b.grossAmount}
-                                onChange={(e) => {
-                                  const n = Number.parseFloat(e.target.value);
-                                  onBookingDraftChange(
-                                    bookingDraft.map((row, i) =>
-                                      i === idx ? { ...row, grossAmount: Number.isFinite(n) ? n : 0 } : row
-                                    )
-                                  );
+                                key={`gross-${rowKey}-${b.grossAmount}`}
+                                defaultValue={formatDecimalForForm(Number.isFinite(b.grossAmount) ? b.grossAmount : 0, numberLocale)}
+                                onBlur={(e) => {
+                                  const parsed = parseLocaleDecimal(e.target.value, numberLocale);
+                                  updateBookingDraftSorted(bookingDraft.map((row, i) => (i === idx ? { ...row, grossAmount: parsed ?? 0 } : row)));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
                                 }}
                                 title={t(language, "cloudBookingsGrossHint")}
                                 aria-label={t(language, "cloudBookingsGrossHint")}
@@ -835,17 +890,20 @@ export function NewTradeView({
                             </td>
                             <td>
                               <input
-                                type="number"
-                                step="any"
+                                type="text"
+                                inputMode="decimal"
                                 className="booking-num-input"
-                                value={b.feesAmount}
-                                onChange={(e) => {
-                                  const n = Number.parseFloat(e.target.value);
-                                  onBookingDraftChange(
-                                    bookingDraft.map((row, i) =>
-                                      i === idx ? { ...row, feesAmount: Number.isFinite(n) ? n : 0 } : row
-                                    )
-                                  );
+                                key={`fees-${rowKey}-${b.feesAmount}`}
+                                defaultValue={formatDecimalForForm(Number.isFinite(b.feesAmount) ? b.feesAmount : 0, numberLocale)}
+                                onBlur={(e) => {
+                                  const parsed = parseLocaleDecimal(e.target.value, numberLocale);
+                                  updateBookingDraftSorted(bookingDraft.map((row, i) => (i === idx ? { ...row, feesAmount: parsed ?? 0 } : row)));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
                                 }}
                               />
                             </td>
@@ -875,7 +933,7 @@ export function NewTradeView({
                               let nextTax = trimmed === "" ? 0 : (parseLocaleDecimal(raw, numberLocale) ?? 0);
                               if (!Number.isFinite(nextTax)) nextTax = 0;
                               if (b.kind !== "TAX_CORRECTION" && nextTax < 0) nextTax = 0;
-                              onBookingDraftChange(
+                              updateBookingDraftSorted(
                                 bookingDraft.map((row, i) => (i === idx ? { ...row, taxAmount: nextTax } : row))
                               );
                               setBookingTaxFocus(null);
@@ -893,7 +951,7 @@ export function NewTradeView({
                             type="button"
                             className="secondary slim"
                             disabled={!canRemove}
-                            onClick={() => onBookingDraftChange(bookingDraft.filter((_, i) => i !== idx))}
+                            onClick={() => updateBookingDraftSorted(bookingDraft.filter((_, i) => i !== idx))}
                           >
                             {t(language, "cloudBookingsRemove")}
                           </button>
@@ -909,7 +967,7 @@ export function NewTradeView({
                 <button
                   type="button"
                   className="secondary slim"
-                  onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("TAX_CORRECTION")])}
+                  onClick={() => updateBookingDraftSorted([...bookingDraft, emptyBookingRow("TAX_CORRECTION")])}
                 >
                   {t(language, "cloudBookingsAddTax")}
                 </button>
@@ -918,14 +976,14 @@ export function NewTradeView({
                   <button
                     type="button"
                     className="secondary slim"
-                    onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("BUY")])}
+                    onClick={() => updateBookingDraftSorted([...bookingDraft, emptyBookingRow("BUY")])}
                   >
                     {t(language, "cloudBookingsAddBuy")}
                   </button>
                   <button
                     type="button"
                     className="secondary slim"
-                    onClick={() => onBookingDraftChange([...bookingDraft, emptyBookingRow("SELL")])}
+                    onClick={() => updateBookingDraftSorted([...bookingDraft, emptyBookingRow("SELL")])}
                   >
                     {t(language, "cloudBookingsAddSell")}
                   </button>
@@ -976,30 +1034,28 @@ export function NewTradeView({
               <span className="field-title">{t(language, "txQtyPrice")}</span>
               <div className="formula-row">
                 <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={form.stueck}
-                  onChange={(e) => handleStueckChange(e.target.value)}
+                  onChange={(e) => handleStueckChange(normalizeDecimalInput(e.target.value))}
                   placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
                 <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={form.kaufStueckpreis}
-                  onChange={(e) => setForm((prev) => ({ ...prev, kaufStueckpreis: e.target.value, kaufTransaktionManuell: "" }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, kaufStueckpreis: normalizeDecimalInput(e.target.value), kaufTransaktionManuell: "" }))}
                   placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.kaufTransaktionManuell !== "" ? form.kaufTransaktionManuell : kaufTransaktionValue > 0 ? kaufTransaktionValue.toFixed(2) : ""}
                   onChange={(e) =>
                     setForm((prev) => {
-                      const manual = e.target.value;
+                      const manual = normalizeDecimalInput(e.target.value);
                       const qty = Number.parseFloat(prev.stueck) || 0;
                       const manualValue = Number.parseFloat(manual);
                       return {
@@ -1016,10 +1072,10 @@ export function NewTradeView({
             <label className="field-span-full calc-right-row">
               <span className="field-title">{t(language, "feesBuy")}</span>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.kaufGebuehren}
-                onChange={(e) => setForm((prev) => ({ ...prev, kaufGebuehren: e.target.value }))}
+                onChange={(e) => setForm((prev) => ({ ...prev, kaufGebuehren: normalizeDecimalInput(e.target.value) }))}
                 placeholder="0,00"
               />
             </label>
@@ -1030,10 +1086,10 @@ export function NewTradeView({
             <label className="calc-right-row">
               <span className="field-title">{t(language, "buyPriceEur")}</span>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.kaufPreisManuell !== "" ? form.kaufPreisManuell : kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : ""}
-                onChange={(e) => setForm((prev) => ({ ...prev, kaufPreisManuell: e.target.value }))}
+                onChange={(e) => setForm((prev) => ({ ...prev, kaufPreisManuell: normalizeDecimalInput(e.target.value) }))}
                 placeholder={kaufPreisCalculated > 0 ? kaufPreisCalculated.toFixed(2) : "0,00"}
               />
             </label>
@@ -1056,7 +1112,7 @@ export function NewTradeView({
                   if (v === "Offen") {
                     setForm((prev) => ({ ...prev, tradeStatus: "Offen", verkaufszeitpunkt: "" }));
                     setVerkaufszeitpunktDisplay("");
-                    onBookingDraftChange(bookingDraft.filter((row) => row.kind !== "SELL"));
+                    updateBookingDraftSorted(bookingDraft.filter((row) => row.kind !== "SELL"));
                   } else {
                     setForm((prev) => ({ ...prev, tradeStatus: "Geschlossen" }));
                   }
@@ -1101,9 +1157,8 @@ export function NewTradeView({
               <span className="field-title">{t(language, "txQtyPrice")}</span>
               <div className="formula-row">
                 <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={
                     showBookingEditor
                       ? form.stueckVerkauf
@@ -1113,26 +1168,25 @@ export function NewTradeView({
                   }
                   readOnly={showBookingEditor}
                   title={showBookingEditor ? t(language, "sellQtyFromBookingsHint") : undefined}
-                  onChange={(e) => handleVerkaufStueckChange(e.target.value)}
+                  onChange={(e) => handleVerkaufStueckChange(normalizeDecimalInput(e.target.value))}
                   placeholder={t(language, "qty")}
                 />
                 <span className="formula-operator">x</span>
                 <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={form.verkaufStueckpreis}
-                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufStueckpreis: e.target.value, verkaufTransaktionManuell: "" }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufStueckpreis: normalizeDecimalInput(e.target.value), verkaufTransaktionManuell: "" }))}
                   placeholder={t(language, "unitPrice")}
                 />
                 <span className="formula-operator">=</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.verkaufTransaktionManuell !== "" ? form.verkaufTransaktionManuell : verkaufTransaktionValue > 0 ? verkaufTransaktionValue.toFixed(2) : ""}
                   onChange={(e) =>
                     setForm((prev) => {
-                      const manual = e.target.value;
+                      const manual = normalizeDecimalInput(e.target.value);
                       const qty = Number.parseFloat(prev.stueckVerkauf.trim() !== "" ? prev.stueckVerkauf : prev.stueck) || 0;
                       const manualValue = Number.parseFloat(manual);
                       return {
@@ -1149,10 +1203,10 @@ export function NewTradeView({
             <label className="field-span-full calc-right-row">
               <span className="field-title">{t(language, "feesSell")}</span>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.verkaufGebuehren}
-                onChange={(e) => setForm((prev) => ({ ...prev, verkaufGebuehren: e.target.value }))}
+                onChange={(e) => setForm((prev) => ({ ...prev, verkaufGebuehren: normalizeDecimalInput(e.target.value) }))}
                 placeholder="0,00"
               />
             </label>
@@ -1165,10 +1219,10 @@ export function NewTradeView({
               <label className="calc-right-row">
                 <span className="field-title">{t(language, "sellProceedsEur")}</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.verkaufPreisManuell !== "" ? form.verkaufPreisManuell : verkaufStueckCount > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufPreisManuell: e.target.value }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, verkaufPreisManuell: normalizeDecimalInput(e.target.value) }))}
                   placeholder={verkaufStueckCount > 0 && verkaufStueckpreisValue > 0 ? verkaufserloesCalculated.toFixed(2) : "0,00"}
                 />
               </label>

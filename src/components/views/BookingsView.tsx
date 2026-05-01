@@ -75,6 +75,7 @@ interface BookingsViewProps {
   language: AppSettings["language"];
   weekStartsOn: AppSettings["weekStartsOn"];
   onEditTrade: (trade: Trade) => void;
+  onToggleTradeManualChecked: (tradeId: string, checked: boolean) => void;
   onExportBookingsFullExcel: () => void;
   onExportBookingsDbExcel: () => void;
   onCommitBookingsImport: (nextTrades: Trade[], info: { updatedTradeCount: number; rowCount: number }) => void;
@@ -86,10 +87,12 @@ export function BookingsView({
   language,
   weekStartsOn,
   onEditTrade,
+  onToggleTradeManualChecked,
   onExportBookingsFullExcel,
   onExportBookingsDbExcel,
   onCommitBookingsImport
 }: BookingsViewProps) {
+  const checkedTradesTotal = useMemo(() => trades.filter((trade) => !!trade.manualChecked).length, [trades]);
   const [importPreview, setImportPreview] = useState<null | {
     format: "full" | "db";
     rowCount: number;
@@ -102,6 +105,7 @@ export function BookingsView({
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Alle" | TradePositionBookingKind>("Alle");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
+  const [checkedFilter, setCheckedFilter] = useState<"Alle" | "Gecheckt" | "Offen">("Alle");
   const [typFilter, setTypFilter] = useState<string[]>([]);
   const [basiswertFilter, setBasiswertFilter] = useState<string[]>([]);
   const [rangeFilter, setRangeFilter] = useState<"Alle" | "heute" | "7" | "30" | "monat" | "jahr" | "365">("Alle");
@@ -131,6 +135,8 @@ export function BookingsView({
     return rows.filter((row) => {
       if (kindFilter !== "Alle" && row.booking.kind !== kindFilter) return false;
       if (statusFilter !== "Alle" && row.tradeStatus !== statusFilter) return false;
+      if (checkedFilter === "Gecheckt" && !row.tradeManualChecked) return false;
+      if (checkedFilter === "Offen" && row.tradeManualChecked) return false;
       if (typFilter.length > 0 && !typFilter.includes(row.tradeTyp)) return false;
       if (basiswertFilter.length > 0 && !basiswertFilter.includes(row.basiswert)) return false;
       if (!q) return true;
@@ -146,7 +152,7 @@ export function BookingsView({
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search, kindFilter, statusFilter, typFilter, basiswertFilter, language]);
+  }, [rows, search, kindFilter, statusFilter, checkedFilter, typFilter, basiswertFilter, language]);
 
   const bookingsCalendarMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -346,6 +352,7 @@ export function BookingsView({
     setSearch("");
     setKindFilter("Alle");
     setStatusFilter("Alle");
+    setCheckedFilter("Alle");
     setTypFilter([]);
     setBasiswertFilter([]);
     setRangeFilter("Alle");
@@ -590,6 +597,15 @@ export function BookingsView({
           </h3>
           <div className="value">{stats.sellN}</div>
         </div>
+        <div className="card">
+          <h3>
+            <Layers size={14} />
+            {t(language, "manualCheckedProgress")}
+          </h3>
+          <div className="value">
+            {checkedTradesTotal} / {trades.length}
+          </div>
+        </div>
       </section>
 
       <div className="trades-summary-grid trades-summary-grid-spaced">
@@ -699,6 +715,14 @@ export function BookingsView({
                   <option value="SELL">{t(language, "sell")}</option>
                   <option value="INCOME">{t(language, "incomeBooking")}</option>
                   <option value="TAX_CORRECTION">{t(language, "cloudBookingKindTaxCorr")}</option>
+                </select>
+              </label>
+              <label>
+                {t(language, "manualChecked")}
+                <select value={checkedFilter} onChange={(e) => setCheckedFilter(e.target.value as "Alle" | "Gecheckt" | "Offen")}>
+                  <option value="Alle">{t(language, "all")}</option>
+                  <option value="Gecheckt">{t(language, "manualCheckedDone")}</option>
+                  <option value="Offen">{t(language, "manualCheckedTodo")}</option>
                 </select>
               </label>
               <label>
@@ -838,6 +862,7 @@ export function BookingsView({
                   {t(language, "status")}
                   {sortMarker("status")}
                 </th>
+                <th>{t(language, "manualCheckedShort")}</th>
                 <th className={`bookings-num-col sortable`} onClick={() => toggleSort("qty")}>
                   {t(language, "shares")}
                   {sortMarker("qty")}
@@ -883,6 +908,14 @@ export function BookingsView({
                     <td>{row.tradeTyp}</td>
                     <td>{row.basiswert || "—"}</td>
                     <td>{row.tradeStatus}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={row.tradeManualChecked}
+                        title={t(language, "manualChecked")}
+                        onChange={(e) => onToggleTradeManualChecked(row.tradeId, e.target.checked)}
+                      />
+                    </td>
                     <td className="bookings-num-col">{b.qty !== undefined && Number.isFinite(b.qty) ? String(b.qty) : "—"}</td>
                     <td className="bookings-num-col">{b.unitPrice !== undefined && Number.isFinite(b.unitPrice) ? money(b.unitPrice) : "—"}</td>
                     <td className="bookings-num-col">{money(b.grossAmount)}</td>
