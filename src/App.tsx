@@ -44,6 +44,7 @@ import { loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/
 import {
   assignLegacyLegs,
   cloneBookings,
+  emptyBookingRow,
   syntheticBookingsFromTrade,
   syncLastSellBookingTimeFromForm,
   tradeFormAggregatesFromBookings
@@ -1147,7 +1148,6 @@ export default function App() {
 
   /** SELL-Zeilen im Buchungs-Editor (für Speichern/Validierung auch ohne ausgefülltes Verkaufsdatum in der Kachel). */
   const hasSellBookings =
-    !!editingTradeId &&
     !isTaxCorrectionType &&
     !isIncomeType &&
     bookingDraft.some((r) => r.kind === "SELL");
@@ -1177,7 +1177,7 @@ export default function App() {
     const effectiveId = editingTradeId ?? (newTradeDraftIdRef.current ?? `trade-${Date.now()}`);
     if (!editingTradeId) newTradeDraftIdRef.current = effectiveId;
     const shouldAttachBookings =
-      !!editingTradeId && form.typ !== "Dividende" && form.typ !== "Zinszahlung";
+      form.typ !== "Dividende" && form.typ !== "Zinszahlung";
     const verkaufSteuernResolved =
       statusClosed && isTaxCorrectionType && taxCorrectionParsed !== null ? taxCorrectionParsed : verkaufSteuern;
 
@@ -1343,7 +1343,7 @@ export default function App() {
   const startNewTrade = () => {
     newTradeDraftIdRef.current = null;
     setEditingTradeId(null);
-    setBookingDraft([]);
+    setBookingDraft([emptyBookingRow("BUY")]);
     setForm(makeDefaultTradeForm());
     setView("newTrade");
   };

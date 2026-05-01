@@ -160,8 +160,7 @@ export function NewTradeView({
   const isNoBasiswertType = isTaxCorrectionType || isInterestType;
   const isCashflowBookingType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const numberLocale = language === "en" ? "en" : "de";
-  const showBookingEditor =
-    !!editingTradeId && form.typ !== "Dividende" && form.typ !== "Zinszahlung" && form.typ !== "Steuerkorrektur";
+  const showBookingEditor = form.typ !== "Dividende" && form.typ !== "Zinszahlung" && form.typ !== "Steuerkorrektur";
   useEffect(() => {
     setBookingTaxFocus((prev) => (prev && prev.idx >= bookingDraft.length ? null : prev));
   }, [bookingDraft.length]);
@@ -195,7 +194,7 @@ export function NewTradeView({
    * Verkaufszeitpunkt = spätestes SELL-`bookedAt` (wie in `tradeFormAggregatesFromBookings`).
    */
   useEffect(() => {
-    if (!showBookingEditor || !editingTradeId || !bookingDraft.length) return;
+    if (!showBookingEditor || !bookingDraft.length) return;
     if (isTaxCorrectionType || isIncomeType) return;
     const { buy, sell } = tradeFormAggregatesFromBookings(bookingDraft);
     setForm((prev) => ({
@@ -214,7 +213,6 @@ export function NewTradeView({
     }));
   }, [
     bookingDraft,
-    editingTradeId,
     isIncomeType,
     isTaxCorrectionType,
     showBookingEditor,
