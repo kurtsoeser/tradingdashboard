@@ -651,8 +651,15 @@ export async function saveCloudSnapshot(userId: string, snapshot: CloudSnapshot)
 
 function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): Array<Record<string, unknown>> {
   const note = "App bookings sync";
-  const sourceRows =
-    trade.bookings && trade.bookings.length > 0 ? trade.bookings : syntheticBookingsFromTrade(trade);
+  const hasExplicitBookings = Array.isArray(trade.bookings) && trade.bookings.length > 0;
+  const sourceRows = hasExplicitBookings ? trade.bookings! : [];
+
+  // Wichtiger Safety-Guard:
+  // Für normale BUY/SELL-Trades niemals aus synthetischen Defaults (qty=1, gross=0) schreiben.
+  // Sonst würden reale DB-Transaktionen mit 1/0 überschrieben.
+  if (!hasExplicitBookings && trade.typ !== "Steuerkorrektur" && trade.typ !== "Dividende" && trade.typ !== "Zinszahlung") {
+    return [];
+  }
 
   if (trade.typ === "Steuerkorrektur") {
     const taxOnly = sourceRows.filter((b) => b.kind === "TAX_CORRECTION");
@@ -802,17 +809,6 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
     posIdByLegacy.set(legacyTradeId, posId);
   }
 
-  const positionIds = relevantTrades.map((t) => posIdByLegacy.get(t.id)).filter((id): id is string => Boolean(id));
-
-  if (positionIds.length > 0) {
-    const { error: deleteTxError } = await supabase
-      .from("user_position_transactions")
-      .delete()
-      .eq("user_id", userId)
-      .in("position_id", positionIds);
-    if (deleteTxError) throw deleteTxError;
-  }
-
   const txRows: Array<Record<string, unknown>> = [];
   for (const trade of relevantTrades) {
     const positionId = posIdByLegacy.get(trade.id);
@@ -821,6 +817,43 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
   }
 
   if (txRows.length === 0) return;
-  const { error: insertTxError } = await supabase.from("user_position_transactions").insert(txRows);
-  if (insertTxError) throw insertTxError;
+  // Sicherheitsänderung:
+  // - keine "delete all then insert"-Strategie mehr (verhindert Totalverlust bei Insert-Fehlern)
+  // - stattdessen idempotentes Upsert über legacy-Schlüssel
+  const { error: upsertTxError } = await supabase
+    .from("user_position_transactions")
+    .upsert(txRows, { onConflict: "user_id,legacy_trade_id,legacy_leg" });
+  if (upsertTxError) throw upsertTxError;
+
+  // Optionale Bereinigung veralteter Legs pro Trade:
+  // Löscht nur Legs von Trades im aktuellen Snapshot, die nicht mehr erzeugt wurden.
+  const expectedLegPairs = new Set(
+    txRows.map((row) => `${String(row.legacy_trade_id ?? "")}::${String(row.legacy_leg ?? "")}`)
+  );
+  const legacyIds = [...new Set(txRows.map((row) => String(row.legacy_trade_id ?? "")).filter(Boolean))];
+  if (legacyIds.length > 0) {
+    const { data: existingTxRows, error: existingTxError } = await supabase
+      .from("user_position_transactions")
+      .select("transaction_id,legacy_trade_id,legacy_leg")
+      .eq("user_id", userId)
+      .in("legacy_trade_id", legacyIds);
+    if (existingTxError) throw existingTxError;
+
+    const staleTxIds = (existingTxRows ?? [])
+      .filter((row) => {
+        const key = `${String((row as Record<string, unknown>).legacy_trade_id ?? "")}::${String((row as Record<string, unknown>).legacy_leg ?? "")}`;
+        return !expectedLegPairs.has(key);
+      })
+      .map((row) => String((row as Record<string, unknown>).transaction_id ?? ""))
+      .filter(Boolean);
+
+    if (staleTxIds.length > 0) {
+      const { error: deleteStaleError } = await supabase
+        .from("user_position_transactions")
+        .delete()
+        .eq("user_id", userId)
+        .in("transaction_id", staleTxIds);
+      if (deleteStaleError) throw deleteStaleError;
+    }
+  }
 }

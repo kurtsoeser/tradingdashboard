@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+backups/
+supabase/tmp_restore/
+import/*.csv
+trading-dashboard-backup*.json

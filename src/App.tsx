@@ -1367,6 +1367,124 @@ export default function App() {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const exportTradesFullExcel = () => {
+    const rows = trades.map((trade) => ({
+      trade_id: trade.id,
+      source_broker: trade.sourceBroker ?? "",
+      source_account: trade.sourceAccount ?? "",
+      external_event_id: trade.externalEventId ?? "",
+      name: trade.name,
+      typ: trade.typ,
+      basiswert: trade.basiswert,
+      isin: trade.isin ?? "",
+      wkn: trade.wkn ?? "",
+      notiz: trade.notiz ?? "",
+      kaufzeitpunkt: trade.kaufzeitpunkt,
+      kauf_preis: trade.kaufPreis,
+      stueck: trade.stueck ?? "",
+      kauf_stueckpreis: trade.kaufStueckpreis ?? "",
+      kauf_transaktion_manuell: trade.kaufTransaktionManuell ?? "",
+      kauf_gebuehren: trade.kaufGebuehren ?? "",
+      kauf_preis_manuell: trade.kaufPreisManuell ?? "",
+      verkaufszeitpunkt: trade.verkaufszeitpunkt ?? "",
+      verkauf_preis: trade.verkaufPreis ?? "",
+      verkauf_stueckpreis: trade.verkaufStueckpreis ?? "",
+      verkauf_transaktion_manuell: trade.verkaufTransaktionManuell ?? "",
+      verkauf_steuern: trade.verkaufSteuern ?? "",
+      verkauf_gebuehren: trade.verkaufGebuehren ?? "",
+      verkauf_preis_manuell: trade.verkaufPreisManuell ?? "",
+      gewinn: trade.gewinn ?? "",
+      status: trade.status,
+      bookings_count: trade.bookings?.length ?? 0,
+      bookings_json: trade.bookings ? JSON.stringify(trade.bookings) : ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Trades_Full");
+    XLSX.writeFile(workbook, "trades-voll-export.xlsx");
+  };
+  const exportTradesDbImportReadyExcel = () => {
+    const rows = trades.map((trade) => ({
+      user_id: userId ?? "",
+      source_broker: trade.sourceBroker ?? "MANUAL",
+      source_account: trade.sourceAccount ?? "",
+      name: trade.name,
+      typ: trade.typ,
+      basiswert: trade.basiswert ?? "",
+      isin: trade.isin ?? "",
+      wkn: trade.wkn ?? "",
+      notiz: trade.notiz ?? "",
+      opened_at: trade.kaufzeitpunkt ?? "",
+      closed_at: trade.status === "Geschlossen" ? trade.verkaufszeitpunkt ?? "" : "",
+      status: trade.status === "Geschlossen" ? "CLOSED" : "OPEN",
+      legacy_trade_id: trade.id
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "user_positions");
+    XLSX.writeFile(workbook, "trades-db-import-ready.xlsx");
+  };
+
+  const exportBookingsFullExcel = () => {
+    const rows = allBookingRows.map((row) => ({
+      row_key: row.rowKey,
+      trade_id: row.tradeId,
+      trade_name: row.tradeName,
+      trade_typ: row.tradeTyp,
+      basiswert: row.basiswert,
+      trade_status: row.tradeStatus,
+      booking_kind: row.booking.kind,
+      transaction_id: row.booking.transactionId,
+      legacy_leg: row.booking.legacyLeg ?? "",
+      booked_at_iso: row.booking.bookedAtIso,
+      booked_at_display: row.booking.bookedAtDisplay,
+      qty: row.booking.qty ?? "",
+      unit_price: row.booking.unitPrice ?? "",
+      gross_amount: row.booking.grossAmount,
+      fees_amount: row.booking.feesAmount,
+      tax_amount: row.booking.taxAmount
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Buchungen_Full");
+    XLSX.writeFile(workbook, "buchungen-voll-export.xlsx");
+  };
+  const commitBookingsImport = (nextTrades: Trade[], info: { updatedTradeCount: number; rowCount: number }) => {
+    const lang = appSettings.language;
+    const normalized = normalizeTradesOnLoad(nextTrades).trades;
+    setTrades(normalized);
+    saveTradesToStorage(normalized);
+    window.alert(t(lang, "bookingsImportOk", { trades: info.updatedTradeCount, rows: info.rowCount }));
+  };
+
+  const exportBookingsDbImportReadyExcel = () => {
+    const rows = allBookingRows.map((row) => {
+      const trade = trades.find((t) => t.id === row.tradeId);
+      return {
+        user_id: userId ?? "",
+        source_broker: trade?.sourceBroker ?? "MANUAL",
+        source_account: trade?.sourceAccount ?? "",
+        legacy_trade_id: row.tradeId,
+        legacy_leg: row.booking.legacyLeg ?? row.booking.kind,
+        external_transaction_id: row.booking.transactionId ?? "",
+        kind: row.booking.kind,
+        booked_at: row.booking.bookedAtIso ?? "",
+        qty: row.booking.qty ?? "",
+        unit_price: row.booking.unitPrice ?? "",
+        gross_amount: row.booking.grossAmount ?? 0,
+        fees_amount: row.booking.feesAmount ?? 0,
+        tax_amount: row.booking.taxAmount ?? 0,
+        tax_mode: "MANUAL",
+        note: "App bookings sync"
+      };
+    });
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "user_position_transactions");
+    XLSX.writeFile(workbook, "buchungen-db-import-ready.xlsx");
+  };
   const exportTradesJsonBackup = () => {
     const json = buildAppBackupJson({
       trades,
@@ -1668,6 +1786,9 @@ export default function App() {
             language={appSettings.language}
             weekStartsOn={appSettings.weekStartsOn}
             onEditTrade={editTrade}
+            onExportBookingsFullExcel={exportBookingsFullExcel}
+            onExportBookingsDbExcel={exportBookingsDbImportReadyExcel}
+            onCommitBookingsImport={commitBookingsImport}
           />
         )}
         {view === "trades" && (
@@ -1699,6 +1820,8 @@ export default function App() {
             onDownloadImportTemplateCsv={downloadImportTemplateCsv}
             onDownloadImportTemplateExcel={downloadImportTemplateExcel}
             onExportTradesCsvForExcel={exportTradesCsvForExcel}
+            onExportTradesFullExcel={exportTradesFullExcel}
+            onExportTradesDbExcel={exportTradesDbImportReadyExcel}
             onGoToNewTrade={startNewTrade}
             onEditTrade={editTrade}
             onDeleteTrade={deleteTrade}

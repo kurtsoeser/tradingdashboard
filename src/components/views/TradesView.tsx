@@ -39,6 +39,8 @@ interface TradesViewProps {
   onDownloadImportTemplateCsv: () => void;
   onDownloadImportTemplateExcel: () => void;
   onExportTradesCsvForExcel: () => void;
+  onExportTradesFullExcel: () => void;
+  onExportTradesDbExcel: () => void;
   onGoToNewTrade: () => void;
   onEditTrade: (trade: Trade) => void;
   onDeleteTrade: (id: string) => void;
@@ -555,6 +557,20 @@ export function TradesView(props: TradesViewProps) {
                     {t(props.language, "csvExportExcel")}
                   </span>
                   <small>{t(props.language, "csvExportExcelHint")}</small>
+                </button>
+                <button className="actions-dropdown-item" onClick={props.onExportTradesFullExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    {t(props.language, "tradesFullExportExcel")}
+                  </span>
+                  <small>{t(props.language, "tradesFullExportExcelHint")}</small>
+                </button>
+                <button className="actions-dropdown-item" onClick={props.onExportTradesDbExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    {t(props.language, "tradesDbExportExcel")}
+                  </span>
+                  <small>{t(props.language, "tradesDbExportExcelHint")}</small>
                 </button>
               </div>
             </details>

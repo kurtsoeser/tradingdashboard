@@ -230,6 +230,16 @@ body {
   font-size: 12px;
 }
 
+.auth-success {
+  margin: 0;
+  color: #89f1b5;
+  border: 1px solid #1f5e3a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(41, 176, 98, 0.12);
+  font-size: 12px;
+}
+
 .auth-topbar {
   display: flex;
   justify-content: flex-end;
@@ -4483,6 +4493,74 @@ a.new-trade-derivative-finance-link {
   flex-shrink: 0;
 }
 
+.bookings-import-preview-modal {
+  max-width: min(1100px, 100vw - 24px);
+}
+
+.bookings-import-preview-intro {
+  margin: 0 18px 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.bookings-import-preview-scroll {
+  max-height: min(56vh, 520px);
+  overflow: auto;
+  margin: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bookings-import-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.bookings-import-preview-table th,
+.bookings-import-preview-table td {
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.bookings-import-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+  font-weight: 600;
+}
+
+.bookings-import-preview-trade-cell {
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.bookings-import-preview-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-muted, inherit);
+}
+
+.bookings-import-preview-meta {
+  color: var(--text, inherit);
+}
+
+.bookings-import-preview-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
+
 .edit-asset-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -4801,6 +4879,72 @@ button.primary.slim.symbol-hit-assign-btn:disabled {
   min-height: 34px;
 }
 
+.import-mapping-table-wrap {
+  overflow-x: auto;
+}
+
+.import-mapping-table select,
+.import-mapping-name-row input {
+  border: 1px solid var(--border);
+  background: #151518;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-height: 34px;
+  width: 100%;
+}
+
+.import-mapping-table th select {
+  margin-top: 6px;
+}
+
+.import-mapping-name-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.import-mapping-name-row label {
+  display: grid;
+  gap: 5px;
+}
+
+.import-mapping-name-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-mapping-enabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-mapping-enabled input {
+  accent-color: var(--accent, #6f9dff);
+}
+
+.import-mapping-name-builder {
+  display: grid;
+  gap: 8px;
+}
+
+.import-mapping-name-builder > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-mapping-name-builder-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-mapping-name-builder-row .secondary.is-active {
+  border-color: color-mix(in srgb, var(--accent, #6f9dff) 70%, var(--border) 30%);
+  color: var(--text);
+}
+
 @media (max-width: 980px) {
   .import-steps-track {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4810,5 +4954,9 @@ button.primary.slim.symbol-hit-assign-btn:disabled {
 @media (max-width: 640px) {
   .import-steps-track {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .import-mapping-name-row {
+    grid-template-columns: 1fr;
   }
 }

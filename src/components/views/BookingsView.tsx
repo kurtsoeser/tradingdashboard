@@ -1,22 +1,29 @@
 import {
   Briefcase,
+  ChevronDown,
   CircleDollarSign,
   ClipboardList,
+  FileDown,
+  FileSpreadsheet,
   HandCoins,
   Layers,
   Search,
   TrendingDown,
-  TrendingUp
+  TrendingUp,
+  Upload
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useMemo, useState } from "react";
 import { getCalendarMonthLabel, getWeekdayNames } from "../../app/date";
-import { t } from "../../app/i18n";
+import { t, type I18nKey } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
 import type { SortDirection } from "../../app/types";
 import { money } from "../../lib/analytics";
 import type { FlatBookingRow } from "../../lib/flattenBookings";
 import type { Trade, TradePositionBookingKind } from "../../types/trade";
+import { BookingsImportPreviewModal } from "../BookingsImportPreviewModal";
 import { PageHeader } from "../PageHeader";
+import { runBookingsExcelImport } from "../../lib/bookingsFullExcelImport";
 
 function kindLabel(language: AppSettings["language"], kind: TradePositionBookingKind): string {
   if (kind === "BUY") return t(language, "buy");
@@ -68,9 +75,30 @@ interface BookingsViewProps {
   language: AppSettings["language"];
   weekStartsOn: AppSettings["weekStartsOn"];
   onEditTrade: (trade: Trade) => void;
+  onExportBookingsFullExcel: () => void;
+  onExportBookingsDbExcel: () => void;
+  onCommitBookingsImport: (nextTrades: Trade[], info: { updatedTradeCount: number; rowCount: number }) => void;
 }
 
-export function BookingsView({ rows, trades, language, weekStartsOn, onEditTrade }: BookingsViewProps) {
+export function BookingsView({
+  rows,
+  trades,
+  language,
+  weekStartsOn,
+  onEditTrade,
+  onExportBookingsFullExcel,
+  onExportBookingsDbExcel,
+  onCommitBookingsImport
+}: BookingsViewProps) {
+  const [importPreview, setImportPreview] = useState<null | {
+    format: "full" | "db";
+    rowCount: number;
+    draftTrades: Trade[];
+    updatedTradeIds: string[];
+    baselineTrades: Trade[];
+  }>(null);
+  const [importNotice, setImportNotice] = useState<null | { kind: "error" | "info"; message: string }>(null);
+
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"Alle" | TradePositionBookingKind>("Alle");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
@@ -388,6 +416,56 @@ export function BookingsView({ rows, trades, language, weekStartsOn, onEditTrade
     setCalendarRangeEnd(null);
   };
 
+  const handleBookingsImportFile = async (file: File, mode: "full" | "db") => {
+    setImportNotice({ kind: "info", message: t(language, "bookingsImportChecking") });
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
+      setImportNotice({ kind: "error", message: t(language, "bookingsImportExcelOnly") });
+      return;
+    }
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      let result = runBookingsExcelImport(trades, workbook, mode);
+      if (
+        !result.ok &&
+        ((mode === "full" && result.errorKey === "bookingsImportBadHeader") ||
+          (mode === "db" && result.errorKey === "bookingsImportBadHeaderDb"))
+      ) {
+        // Nutzer hat ggf. das andere Importformat gewählt: automatisch einmal mit dem Gegenformat versuchen.
+        const fallbackMode = mode === "full" ? "db" : "full";
+        const fallback = runBookingsExcelImport(trades, workbook, fallbackMode);
+        if (fallback.ok) {
+          result = fallback;
+          setImportNotice({
+            kind: "info",
+            message: t(language, "bookingsImportAutoDetected", {
+              format: fallbackMode === "full" ? t(language, "bookingsImportPreviewFormatFull") : t(language, "bookingsImportPreviewFormatDb")
+            })
+          });
+        }
+      }
+      if (!result.ok) {
+        setImportNotice({ kind: "error", message: t(language, result.errorKey as I18nKey, result.vars) });
+        return;
+      }
+      setImportPreview({
+        format: result.format,
+        rowCount: result.rowCount,
+        updatedTradeIds: result.updatedTradeIds,
+        draftTrades: structuredClone(result.trades),
+        baselineTrades: structuredClone(trades)
+      });
+      if (result.updatedTradeIds.length === 0) {
+        setImportNotice({ kind: "info", message: t(language, "bookingsImportNothingToUpdate") });
+      } else if (!importNotice || importNotice.kind !== "info") {
+        setImportNotice(null);
+      }
+    } catch (error) {
+      setImportNotice({ kind: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   return (
     <section className="section trades-page">
       <PageHeader
@@ -398,9 +476,92 @@ export function BookingsView({ rows, trades, language, weekStartsOn, onEditTrade
           </>
         }
         subtitle={t(language, "bookingsPageSubtitle", { n: filtered.length, total: rows.length, trades: trades.length })}
+        actions={
+          <>
+            <input
+              id="bookings-full-import-input"
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden-file-input"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleBookingsImportFile(file, "full");
+                event.target.value = "";
+              }}
+            />
+            <input
+              id="bookings-db-import-input"
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden-file-input"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleBookingsImportFile(file, "db");
+                event.target.value = "";
+              }}
+            />
+            <details className="actions-dropdown">
+              <summary className="secondary">
+                <Upload size={14} />
+                {t(language, "import")}
+                <ChevronDown size={14} />
+              </summary>
+              <div className="actions-dropdown-menu">
+                <label htmlFor="bookings-full-import-input" className="actions-dropdown-item file-pick-btn">
+                  <span className="actions-dropdown-item-content">
+                    <Upload size={14} />
+                    {t(language, "bookingsImportExcel")}
+                  </span>
+                  <small>{t(language, "bookingsImportExcelHint")}</small>
+                </label>
+                <label htmlFor="bookings-db-import-input" className="actions-dropdown-item file-pick-btn">
+                  <span className="actions-dropdown-item-content">
+                    <Upload size={14} />
+                    {t(language, "bookingsImportDbExcel")}
+                  </span>
+                  <small>{t(language, "bookingsImportDbExcelHint")}</small>
+                </label>
+              </div>
+            </details>
+            <details className="actions-dropdown">
+              <summary className="secondary">
+                <FileDown size={14} />
+                {t(language, "export")}
+                <ChevronDown size={14} />
+              </summary>
+              <div className="actions-dropdown-menu">
+                <button className="actions-dropdown-item" onClick={onExportBookingsFullExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    {t(language, "bookingsFullExportExcel")}
+                  </span>
+                  <small>{t(language, "bookingsFullExportExcelHint")}</small>
+                </button>
+                <button className="actions-dropdown-item" onClick={onExportBookingsDbExcel}>
+                  <span className="actions-dropdown-item-content">
+                    <FileSpreadsheet size={14} />
+                    {t(language, "bookingsDbExportExcel")}
+                  </span>
+                  <small>{t(language, "bookingsDbExportExcelHint")}</small>
+                </button>
+              </div>
+            </details>
+          </>
+        }
       />
 
       <section className="kpis trades-kpis">
+        {importNotice ? (
+          <div
+            className="card"
+            style={{
+              borderColor: importNotice.kind === "error" ? "var(--negative, #c93a3a)" : "var(--border)",
+              gridColumn: "1 / -1"
+            }}
+          >
+            <p style={{ margin: 0 }}>{importNotice.message}</p>
+          </div>
+        ) : null}
         <div className="card">
           <h3>
             <Layers size={14} />
@@ -742,6 +903,26 @@ export function BookingsView({ rows, trades, language, weekStartsOn, onEditTrade
           </p>
         ) : null}
       </div>
+
+      {importPreview ? (
+        <BookingsImportPreviewModal
+          language={language}
+          format={importPreview.format}
+          rowCount={importPreview.rowCount}
+          updatedTradeIds={importPreview.updatedTradeIds}
+          draftTrades={importPreview.draftTrades}
+          baselineTrades={importPreview.baselineTrades}
+          onClose={() => setImportPreview(null)}
+          onConfirm={() => {
+            if (!importPreview) return;
+            onCommitBookingsImport(importPreview.draftTrades, {
+              updatedTradeCount: importPreview.updatedTradeIds.length,
+              rowCount: importPreview.rowCount
+            });
+            setImportPreview(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
