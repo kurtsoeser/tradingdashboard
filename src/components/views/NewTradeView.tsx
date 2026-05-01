@@ -100,6 +100,7 @@ export function NewTradeView({
   bookingDraft,
   onBookingDraftChange
 }: NewTradeViewProps) {
+  const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth <= 760 : false));
   const normalizeDecimalInput = (value: string) => value.replace(/,/g, ".");
 
   const sortBookingRowsByDateTimeAsc = (rows: TradePositionBooking[]): TradePositionBooking[] =>
@@ -161,6 +162,18 @@ export function NewTradeView({
   const isCashflowBookingType = ["Steuerkorrektur", "Zinszahlung", "Dividende"].includes(form.typ);
   const numberLocale = language === "en" ? "en" : "de";
   const showBookingEditor = form.typ !== "Dividende" && form.typ !== "Zinszahlung" && form.typ !== "Steuerkorrektur";
+  const [mobileSectionsOpen, setMobileSectionsOpen] = useState<Record<string, boolean>>({
+    basics: true,
+    notes: false,
+    bookings: false,
+    buy: true,
+    sell: false,
+    result: true,
+    chart: false,
+    derivative: false,
+    history: false,
+    scenario: false
+  });
   useEffect(() => {
     setBookingTaxFocus((prev) => (prev && prev.idx >= bookingDraft.length ? null : prev));
   }, [bookingDraft.length]);
@@ -188,6 +201,12 @@ export function NewTradeView({
   useEffect(() => {
     setVerkaufszeitpunktDisplay(formatDateTimeDisplay(form.verkaufszeitpunkt));
   }, [form.verkaufszeitpunkt]);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   /**
    * Kaufdaten / Verkaufs-Kachel aus Buchungszeilen (Bearbeitung, keine Cashflow-Typen).
@@ -538,9 +557,28 @@ export function NewTradeView({
     </span>
   );
 
+  const mobileWrap = (key: string, title: string, content: JSX.Element) => {
+    if (!isMobile) return content;
+    const open = !!mobileSectionsOpen[key];
+    return (
+      <details
+        className="new-trade-mobile-section"
+        open={open}
+        onToggle={(event) => {
+          const target = event.currentTarget;
+          setMobileSectionsOpen((prev) => ({ ...prev, [key]: target.open }));
+        }}
+      >
+        <summary className="new-trade-mobile-summary">{title}</summary>
+        <div className="new-trade-mobile-body">{content}</div>
+      </details>
+    );
+  };
+
   return (
-    <section className="section new-trade">
+    <section className={`section new-trade${isMobile ? " new-trade--mobile-one-hand" : ""}`}>
       <PageHeader
+        className={isMobile ? "page-header--mobile-one-hand" : undefined}
         title={
           isTaxCorrectionType
             ? t(language, "taxCorrectionPageTitle")
@@ -579,10 +617,12 @@ export function NewTradeView({
                 <span>{t(language, "manualChecked")}</span>
               </label>
             ) : null}
-            <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
-              <Save size={14} />
-              {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
-            </button>
+            {!isMobile ? (
+              <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
+                <Save size={14} />
+                {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
+              </button>
+            ) : null}
           </>
         }
       />
@@ -597,7 +637,7 @@ export function NewTradeView({
             setKaufzeitpunktDisplay={setKaufzeitpunktDisplay}
             commitKaufzeitpunktDisplay={commitKaufzeitpunktDisplay}
           />
-          <div className="new-trade-actions">
+          <div className={`new-trade-actions${isMobile ? " new-trade-actions--inline-only-desktop" : ""}`}>
             <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
               {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
             </button>
@@ -617,7 +657,7 @@ export function NewTradeView({
             setKaufzeitpunktDisplay={setKaufzeitpunktDisplay}
             commitKaufzeitpunktDisplay={commitKaufzeitpunktDisplay}
           />
-          <div className="new-trade-actions">
+          <div className={`new-trade-actions${isMobile ? " new-trade-actions--inline-only-desktop" : ""}`}>
             <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
               {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
             </button>
@@ -629,7 +669,7 @@ export function NewTradeView({
       ) : (
         <>
       <div className="new-trade-grid">
-        <div className="card form-card card-span-2">
+        {mobileWrap("basics", t(language, "basics"), <div className={`card form-card ${isMobile ? "" : "card-span-2"}`}>
           <div className="card-title-row">
             <h3>{t(language, "basics")}</h3>
             <Tags size={20} className="card-title-icon" />
@@ -705,9 +745,9 @@ export function NewTradeView({
               <input value={statusClosed ? t(language, "closed") : t(language, "open")} disabled />
             </label>
           </div>
-        </div>
+        </div>)}
 
-        <div className="card form-card notes-card new-trade-notes-card card-span-1">
+        {mobileWrap("notes", t(language, "notes"), <div className={`card form-card notes-card new-trade-notes-card ${isMobile ? "" : "card-span-1"}`}>
           <div className="card-title-row">
             <h3>{t(language, "notes")}</h3>
             <FileText size={20} className="card-title-icon" />
@@ -720,10 +760,9 @@ export function NewTradeView({
               placeholder={t(language, "notesPlaceholder")}
             />
           </label>
-        </div>
+        </div>)}
 
-        {showBookingEditor && bookingDraft.length > 0 && (
-          <div className="card form-card card-span-3 trade-cloud-bookings-card">
+        {showBookingEditor && bookingDraft.length > 0 && mobileWrap("bookings", t(language, "cloudBookingsTitle"), <div className={`card form-card trade-cloud-bookings-card ${isMobile ? "" : "card-span-3"}`}>
             <div className="card-title-row">
               <h3>{t(language, "cloudBookingsTitle")}</h3>
               <Layers size={20} className="card-title-icon" />
@@ -1006,11 +1045,9 @@ export function NewTradeView({
                 </>
               )}
             </div>
-          </div>
-        )}
+          </div>)}
 
-        {!isCashflowBookingType && (
-          <div className="card form-card card-span-1 calc-card">
+        {!isCashflowBookingType && mobileWrap("buy", t(language, "buyData"), <div className={`card form-card calc-card ${isMobile ? "" : "card-span-1"}`}>
           <div className="card-title-row">
             <h3>{t(language, "buyData")}</h3>
             <Landmark size={20} className="card-title-icon" />
@@ -1110,10 +1147,9 @@ export function NewTradeView({
               />
             </label>
           </div>
-          </div>
-        )}
+          </div>)}
 
-        {!isTaxCorrectionType && !isIncomeType && <div className="card form-card card-span-1 calc-card">
+        {!isTaxCorrectionType && !isIncomeType && mobileWrap("sell", t(language, "sellData"), <div className={`card form-card calc-card ${isMobile ? "" : "card-span-1"}`}>
           <div className="card-title-row">
             <h3>{t(language, "sellData")}</h3>
             <ChartCandlestick size={20} className="card-title-icon" />
@@ -1244,9 +1280,9 @@ export function NewTradeView({
               </label>
             </fieldset>
           </div>
-        </div>}
+        </div>)}
 
-        <div
+        {mobileWrap("result", t(language, "result"), <div
           className={`card form-card card-span-1 result-card ${gewinn > 0 ? "is-win" : gewinn < 0 ? "is-loss" : "is-neutral"}`}
           style={{ "--result-tint-strength": `${resultTintStrength}` } as React.CSSProperties}
         >
@@ -1306,10 +1342,9 @@ export function NewTradeView({
               </label>
             </>
           </div>
-        </div>
+        </div>)}
 
-        {showLiveChartCard && (
-          <div className="card form-card card-span-2 new-trade-live-chart-wide">
+        {showLiveChartCard && mobileWrap("chart", t(language, "liveChart"), <div className={`card form-card new-trade-live-chart-wide ${isMobile ? "" : "card-span-2"}`}>
             <div className="card-title-row">
               <h3>
                 <Activity size={18} aria-hidden style={{ verticalAlign: "middle", marginRight: 6 }} />
@@ -1368,12 +1403,10 @@ export function NewTradeView({
                 </div>
               </div>
             )}
-          </div>
-        )}
+          </div>)}
 
-        {derivativeLiveQueriesChart && (
-          <div
-            className={`card form-card new-trade-derivative-kurs-suche-row ${showLiveChartCard ? "card-span-1" : "card-span-3"}`}
+        {derivativeLiveQueriesChart && mobileWrap("derivative", t(language, "liveChartDerivativeTitle"), <div
+            className={`card form-card new-trade-derivative-kurs-suche-row ${isMobile ? "" : showLiveChartCard ? "card-span-1" : "card-span-3"}`}
           >
             <div className="card-title-row">
               <h3>
@@ -1402,10 +1435,9 @@ export function NewTradeView({
                 <p className="live-chart-empty">{t(language, "newTradeDerivativeLiveNeedQuery")}</p>
               )}
             </div>
-          </div>
-        )}
+          </div>)}
 
-        {!isNoBasiswertType && <div className="card form-card asset-history-card card-span-1">
+        {!isNoBasiswertType && mobileWrap("history", t(language, "assetHistory"), <div className={`card form-card asset-history-card ${isMobile ? "" : "card-span-1"}`}>
           <div className="asset-history-title-row">
             <h3>
               {t(language, "assetHistory")}
@@ -1464,9 +1496,9 @@ export function NewTradeView({
               </div>
             </>
           )}
-        </div>}
+        </div>)}
 
-        {!isNoBasiswertType && <div className="card form-card card-span-1">
+        {!isNoBasiswertType && mobileWrap("scenario", t(language, "priceScenario"), <div className={`card form-card ${isMobile ? "" : "card-span-1"}`}>
           <div className="card-title-row">
             <h3>{t(language, "priceScenario")}</h3>
             <Activity size={20} className="card-title-icon" />
@@ -1486,10 +1518,10 @@ export function NewTradeView({
               {renderMiniBars(preisSzenario, "pl")}
             </div>
           )}
-        </div>}
+        </div>)}
       </div>
 
-      <div className="new-trade-actions">
+      <div className={`new-trade-actions${isMobile ? " new-trade-actions--inline-only-desktop" : ""}`}>
         <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
           {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
         </button>
@@ -1499,6 +1531,18 @@ export function NewTradeView({
       </div>
         </>
       )}
+
+      {isMobile ? (
+        <div className="new-trade-sticky-bar" role="toolbar" aria-label={t(language, "newTradeTitle")}>
+          <button className="secondary new-trade-sticky-bar-cancel" type="button" onClick={onCancelNewTradeView}>
+            {t(language, "cancel")}
+          </button>
+          <button className="primary new-trade-sticky-bar-save" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>
+            <Save size={16} />
+            {editingTradeId ? t(language, "saveChanges") : t(language, "save")}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

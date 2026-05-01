@@ -1,4 +1,5 @@
 import { Clock3, HandCoins, Layers, LayoutDashboard, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
 import { formatDateTimeAT, formatMonthLabel, isMarketOpenNow } from "../../app/date";
 import { t } from "../../app/i18n";
 import { money } from "../../lib/analytics";
@@ -55,6 +56,7 @@ export function DashboardView({
   language,
   showMarketPulse
 }: DashboardViewProps) {
+  const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth <= 760 : false));
   const locale = language === "en" ? "en-US" : "de-AT";
   const dashboardTime = dashboardNow.toLocaleTimeString(locale, {
     hour: "2-digit",
@@ -68,10 +70,16 @@ export function DashboardView({
   });
   const marketOpen = isMarketOpenNow(dashboardNow, exchange);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   return (
     <>
       <PageHeader
-        className="dashboard-header"
+        className={`dashboard-header${isMobile ? " page-header--mobile-one-hand" : ""}`}
         title={
           <>
             <LayoutDashboard size={18} />
@@ -140,48 +148,67 @@ export function DashboardView({
             {t(language, "showAll")}
           </button>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th onClick={() => onToggleDashboardOpenSort("name")} className="sortable">
-                {t(language, "name")}
-                {dashboardOpenSortMarker("name")}
-              </th>
-              <th onClick={() => onToggleDashboardOpenSort("typ")} className="sortable">
-                {t(language, "type")}
-                {dashboardOpenSortMarker("typ")}
-              </th>
-              <th onClick={() => onToggleDashboardOpenSort("basiswert")} className="sortable">
-                {t(language, "basiswert")}
-                {dashboardOpenSortMarker("basiswert")}
-              </th>
-              <th onClick={() => onToggleDashboardOpenSort("kaufzeitpunkt")} className="sortable">
-                {t(language, "buyDate")}
-                {dashboardOpenSortMarker("kaufzeitpunkt")}
-              </th>
-              <th onClick={() => onToggleDashboardOpenSort("kaufPreis")} className="sortable">
-                {t(language, "invested")}
-                {dashboardOpenSortMarker("kaufPreis")}
-              </th>
-              <th onClick={() => onToggleDashboardOpenSort("stueck")} className="sortable">
-                {t(language, "shares")}
-                {dashboardOpenSortMarker("stueck")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+        {isMobile ? (
+          <div className="dashboard-open-mobile-list">
             {dashboardOpenPositions.slice(0, 10).map((trade) => (
-              <tr key={`open-${trade.id}`} className="dashboard-open-row" onClick={() => onEditTrade(trade)}>
-                <td>{trade.name}</td>
-                <td>{trade.typ}</td>
-                <td>{trade.basiswert}</td>
-                <td>{formatDateTimeAT(trade.kaufzeitpunkt)}</td>
-                <td>{money(trade.kaufPreis ?? 0)}</td>
-                <td>{trade.stueck ?? "-"}</td>
-              </tr>
+              <button key={`mobile-open-${trade.id}`} type="button" className="dashboard-open-mobile-card" onClick={() => onEditTrade(trade)}>
+                <div className="dashboard-open-mobile-head">
+                  <strong>{trade.name}</strong>
+                  <span>{trade.typ}</span>
+                </div>
+                <div className="dashboard-open-mobile-grid">
+                  <span>{trade.basiswert || "-"}</span>
+                  <span>{formatDateTimeAT(trade.kaufzeitpunkt)}</span>
+                  <span>{money(trade.kaufPreis ?? 0)}</span>
+                  <span>{trade.stueck ?? "-"}</span>
+                </div>
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th onClick={() => onToggleDashboardOpenSort("name")} className="sortable">
+                  {t(language, "name")}
+                  {dashboardOpenSortMarker("name")}
+                </th>
+                <th onClick={() => onToggleDashboardOpenSort("typ")} className="sortable">
+                  {t(language, "type")}
+                  {dashboardOpenSortMarker("typ")}
+                </th>
+                <th onClick={() => onToggleDashboardOpenSort("basiswert")} className="sortable">
+                  {t(language, "basiswert")}
+                  {dashboardOpenSortMarker("basiswert")}
+                </th>
+                <th onClick={() => onToggleDashboardOpenSort("kaufzeitpunkt")} className="sortable">
+                  {t(language, "buyDate")}
+                  {dashboardOpenSortMarker("kaufzeitpunkt")}
+                </th>
+                <th onClick={() => onToggleDashboardOpenSort("kaufPreis")} className="sortable">
+                  {t(language, "invested")}
+                  {dashboardOpenSortMarker("kaufPreis")}
+                </th>
+                <th onClick={() => onToggleDashboardOpenSort("stueck")} className="sortable">
+                  {t(language, "shares")}
+                  {dashboardOpenSortMarker("stueck")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboardOpenPositions.slice(0, 10).map((trade) => (
+                <tr key={`open-${trade.id}`} className="dashboard-open-row" onClick={() => onEditTrade(trade)}>
+                  <td>{trade.name}</td>
+                  <td>{trade.typ}</td>
+                  <td>{trade.basiswert}</td>
+                  <td>{formatDateTimeAT(trade.kaufzeitpunkt)}</td>
+                  <td>{money(trade.kaufPreis ?? 0)}</td>
+                  <td>{trade.stueck ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {dashboardOpenPositions.length > 10 && (
           <p className="dashboard-more-link">{t(language, "moreOpenTrades", { n: dashboardOpenPositions.length - 10 })}</p>
         )}
@@ -190,6 +217,18 @@ export function DashboardView({
       <section className="section dashboard-bottom-grid">
         <div className="card">
           <h3>{t(language, "monthPL")}</h3>
+          {isMobile ? (
+            <div className="dashboard-month-mobile-list">
+              {dashboardMonthlyStats.map((m) => (
+                <div key={`mobile-month-${m.month}`} className="dashboard-month-mobile-card">
+                  <strong>{formatMonthLabel(m.month)}</strong>
+                  <span>{t(language, "hashTrades")}: {m.trades}</span>
+                  <span className={m.pl >= 0 ? "positive" : "negative"}>{t(language, "pl")}: {money(m.pl)}</span>
+                  <span>{t(language, "winRate")}: {m.winRate.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          ) : (
           <table>
             <thead>
               <tr>
@@ -212,6 +251,7 @@ export function DashboardView({
               ))}
             </tbody>
           </table>
+          )}
         </div>
 
         <div className="card">

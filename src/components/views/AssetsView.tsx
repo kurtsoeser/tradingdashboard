@@ -60,6 +60,7 @@ export function AssetsView({
   onSaveAssetMeta,
   traderProviders
 }: AssetsViewProps) {
+  const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth <= 760 : false));
   /** Basiswert-Zeile, für die das Live-Chart angezeigt wird (Tabellenklick, erneuter Klick schließt). */
   const [chartAssetName, setChartAssetName] = useState<string | null>(null);
   const chartExpandRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -82,6 +83,12 @@ export function AssetsView({
     if (!chartAssetName) return;
     chartExpandRowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [chartAssetName]);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const [editAsset, setEditAsset] = useState<AssetDisplayRow | null>(null);
 
@@ -225,6 +232,7 @@ export function AssetsView({
         }}
       />
       <PageHeader
+        className={isMobile ? "page-header--mobile-one-hand" : undefined}
         title={
           <>
             <Database size={18} />
@@ -320,7 +328,7 @@ export function AssetsView({
         </div>
       </div>
 
-      <div className="card trades-filters-card">
+      <div className={`card trades-filters-card ${isMobile ? "assets-mobile-filter-sticky" : ""}`}>
         <div className="assets-filters-grid">
           <label>
             {t(language, "search")}
@@ -339,7 +347,48 @@ export function AssetsView({
         </div>
       </div>
 
-      <div className="card">
+      {isMobile ? (
+        <div className="assets-mobile-list">
+          {filteredAssets.map((asset) => {
+            const selected = chartAssetName === asset.name;
+            const tvSymbol = assetToTradingViewSymbol(asset);
+            return (
+              <article key={`mobile-asset-${asset.name}`} className="card assets-mobile-card">
+                <button type="button" className="assets-mobile-main" onClick={() => setChartAssetName((prev) => (prev === asset.name ? null : asset.name))}>
+                  <div className="assets-mobile-head">
+                    <strong>{asset.name}</strong>
+                    <span className="asset-badge">{asset.category}</span>
+                  </div>
+                  <div className="assets-mobile-grid">
+                    <span>Trades: {asset.tradesCount}</span>
+                    <span>Whrg: {asset.waehrung || "EUR"}</span>
+                    <span className={asset.realizedPL >= 0 ? "positive" : "negative"}>P&L: {money(asset.realizedPL)}</span>
+                    <span>Open: {asset.openCapital > 0 ? money(asset.openCapital) : "-"}</span>
+                  </div>
+                </button>
+                <div className="assets-mobile-actions">
+                  <a className="secondary slim" href={toFinanceUrl(asset)} target="_blank" rel="noreferrer">
+                    <ExternalLink size={13} />
+                    {financeServiceLabel}
+                  </a>
+                  <button type="button" className="secondary slim" onClick={() => setEditAsset(asset)}>
+                    <Pencil size={13} />
+                    {t(language, "edit")}
+                  </button>
+                </div>
+                {selected ? (
+                  <div className="assets-mobile-chart">
+                    <p className="live-chart-selection-label">
+                      <strong>{asset.name}</strong> · <code>{tvSymbol ?? "-"}</code>
+                    </p>
+                    {tvSymbol ? <TradingViewLiveChart symbol={tvSymbol} theme={chartTheme} height={320} /> : <p className="live-chart-empty">{t(language, "noTickerHint", { name: asset.name })}</p>}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : <div className="card">
         <h3>{t(language, "allAssetsTitle", { n: filteredAssets.length })}</h3>
         <p className="live-chart-table-hint">{t(language, "assetsRowHint")}</p>
         <table className="assets-table-selectable">
@@ -441,7 +490,7 @@ export function AssetsView({
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </section>
   );
 }

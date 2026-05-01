@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, Copy, ExternalLink, FileDown, FileSpreadsheet, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, Copy, ExternalLink, FileDown, FileSpreadsheet, Filter, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
@@ -77,7 +77,57 @@ export function TradesView(props: TradesViewProps) {
   const toDateKey = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
   const [copyFeedback, setCopyFeedback] = useState<"idle" | "ok" | "error">("idle");
+  const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth <= 760 : false));
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mobileShowAllKpis, setMobileShowAllKpis] = useState(false);
+  const [draftSearch, setDraftSearch] = useState(props.search);
+  const [draftStatusFilter, setDraftStatusFilter] = useState(props.statusFilter);
+  const [draftCheckedFilter, setDraftCheckedFilter] = useState(props.checkedFilter);
+  const [draftSourceFilter, setDraftSourceFilter] = useState(props.sourceFilter);
+  const [draftTypFilter, setDraftTypFilter] = useState<string[]>(props.typFilter);
+  const [draftBasiswertFilter, setDraftBasiswertFilter] = useState<string[]>(props.basiswertFilter);
+  const [draftRangeFilter, setDraftRangeFilter] = useState(props.rangeFilter);
   const checkedCount = useMemo(() => props.trades.filter((trade) => !!trade.manualChecked).length, [props.trades]);
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (props.search.trim()) count += 1;
+    if (props.statusFilter !== "Alle") count += 1;
+    if (props.checkedFilter !== "Alle") count += 1;
+    if (props.sourceFilter !== "Alle") count += 1;
+    if (props.typFilter.length > 0) count += 1;
+    if (props.basiswertFilter.length > 0) count += 1;
+    if (props.rangeFilter !== "Alle") count += 1;
+    return count;
+  }, [
+    props.search,
+    props.statusFilter,
+    props.checkedFilter,
+    props.sourceFilter,
+    props.typFilter.length,
+    props.basiswertFilter.length,
+    props.rangeFilter
+  ]);
+  const visibleKpiIds = useMemo(
+    () => (isMobile && !mobileShowAllKpis ? ["total", "open", "realized", "checked"] : ["total", "open", "winners", "losers", "checked", "buy", "sell", "capital", "realized"]),
+    [isMobile, mobileShowAllKpis]
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileFilterOpen) return;
+    setDraftSearch(props.search);
+    setDraftStatusFilter(props.statusFilter);
+    setDraftCheckedFilter(props.checkedFilter);
+    setDraftSourceFilter(props.sourceFilter);
+    setDraftTypFilter(props.typFilter);
+    setDraftBasiswertFilter(props.basiswertFilter);
+    setDraftRangeFilter(props.rangeFilter);
+  }, [mobileFilterOpen, props.search, props.statusFilter, props.checkedFilter, props.sourceFilter, props.typFilter, props.basiswertFilter, props.rangeFilter]);
 
   const columnPrefsKey = TRADES_COLUMN_PREFS_STORAGE_KEY;
   const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
@@ -437,6 +487,27 @@ export function TradesView(props: TradesViewProps) {
     window.setTimeout(() => setCopyFeedback("idle"), 1800);
   };
 
+  const applyMobileFilters = () => {
+    props.onSearchChange(draftSearch);
+    props.onStatusFilterChange(draftStatusFilter);
+    props.onCheckedFilterChange(draftCheckedFilter);
+    props.onSourceFilterChange(draftSourceFilter);
+    props.onTypFilterChange(draftTypFilter);
+    props.onBasiswertFilterChange(draftBasiswertFilter);
+    props.onRangeFilterChange(draftRangeFilter);
+    setMobileFilterOpen(false);
+  };
+
+  const resetMobileFilters = () => {
+    setDraftSearch("");
+    setDraftStatusFilter("Alle");
+    setDraftCheckedFilter("Alle");
+    setDraftSourceFilter("Alle");
+    setDraftTypFilter([]);
+    setDraftBasiswertFilter([]);
+    setDraftRangeFilter("Alle");
+  };
+
   const reorderVisibleColumns = (from: ColumnId, to: ColumnId) => {
     if (from === to) return;
     setColumnOrder((prev) => {
@@ -536,8 +607,9 @@ export function TradesView(props: TradesViewProps) {
   };
 
   return (
-    <section className="section trades-page">
+    <section className={`section trades-page${isMobile ? " trades-page--mobile-sticky-bar" : ""}`}>
       <PageHeader
+        className={isMobile ? "page-header--mobile-one-hand" : undefined}
         title={
           <>
             <Search size={18} />
@@ -617,44 +689,46 @@ export function TradesView(props: TradesViewProps) {
                 </button>
               </div>
             </details>
-            <button className="primary new-trade-cta" onClick={props.onGoToNewTrade}>
-              <Plus size={14} />
-              {t(props.language, "newTrade")}
-            </button>
+            {!isMobile ? (
+              <button className="primary new-trade-cta" onClick={props.onGoToNewTrade}>
+                <Plus size={14} />
+                {t(props.language, "newTrade")}
+              </button>
+            ) : null}
           </>
         }
       />
 
       <section className="kpis trades-kpis">
-        <div className="card">
+        {visibleKpiIds.includes("total") ? <div className="card">
           <h3>
             <Briefcase size={14} />
             {t(props.language, "tradesTotal")}
           </h3>
           <div className="value">{props.kpis.totalTrades}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("open") ? <div className="card">
           <h3>
             <Layers size={14} />
             {t(props.language, "openPositions")}
           </h3>
           <div className="value">{props.kpis.openTrades}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("winners") ? <div className="card">
           <h3>
             <TrendingUp size={14} />
             {t(props.language, "winners")}
           </h3>
           <div className="value positive">{props.tradesSummary.winners}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("losers") ? <div className="card">
           <h3>
             <TrendingDown size={14} />
             {t(props.language, "losers")}
           </h3>
           <div className="value negative">{props.tradesSummary.losers}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("checked") ? <div className="card">
           <h3>
             <CheckCircle2 size={14} />
             {t(props.language, "manualCheckedProgress")}
@@ -662,39 +736,75 @@ export function TradesView(props: TradesViewProps) {
           <div className="value">
             {checkedCount} / {props.trades.length}
           </div>
-        </div>
-      </section>
-
-      <div className="trades-summary-grid trades-summary-grid-spaced">
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("buy") ? <div className="card">
           <h3>
             <CircleDollarSign size={14} />
             {t(props.language, "sigmaBuy")}
           </h3>
           <div className="value">{money(props.tradesSummary.totalKauf)}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("sell") ? <div className="card">
           <h3>
             <CircleDollarSign size={14} />
             {t(props.language, "sigmaSell")}
           </h3>
           <div className="value">{money(props.tradesSummary.totalVerkauf)}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("capital") ? <div className="card">
           <h3>
             <HandCoins size={14} />
             {t(props.language, "openCapital")}
           </h3>
           <div className="value">{money(props.kpis.openCapital)}</div>
-        </div>
-        <div className="card">
+        </div> : null}
+        {visibleKpiIds.includes("realized") ? <div className="card">
           <h3>
             <TrendingUp size={14} />
             {t(props.language, "realizedPL")}
           </h3>
           <div className={`value ${props.kpis.totalPL >= 0 ? "positive" : "negative"}`}>{money(props.kpis.totalPL)}</div>
+        </div> : null}
+      </section>
+
+      {isMobile ? (
+        <div className="trades-mobile-kpi-actions">
+          <button className="secondary slim" type="button" onClick={() => setMobileShowAllKpis((prev) => !prev)}>
+            {mobileShowAllKpis ? "Weniger Kennzahlen" : "Mehr Kennzahlen"}
+          </button>
         </div>
-      </div>
+      ) : (
+        <div className="trades-summary-grid trades-summary-grid-spaced">
+          <div className="card">
+            <h3>
+              <CircleDollarSign size={14} />
+              {t(props.language, "sigmaBuy")}
+            </h3>
+            <div className="value">{money(props.tradesSummary.totalKauf)}</div>
+          </div>
+          <div className="card">
+            <h3>
+              <CircleDollarSign size={14} />
+              {t(props.language, "sigmaSell")}
+            </h3>
+            <div className="value">{money(props.tradesSummary.totalVerkauf)}</div>
+          </div>
+          <div className="card">
+            <h3>
+              <HandCoins size={14} />
+              {t(props.language, "openCapital")}
+            </h3>
+            <div className="value">{money(props.kpis.openCapital)}</div>
+          </div>
+          <div className="card">
+            <h3>
+              <TrendingUp size={14} />
+              {t(props.language, "realizedPL")}
+            </h3>
+            <div className={`value ${props.kpis.totalPL >= 0 ? "positive" : "negative"}`}>{money(props.kpis.totalPL)}</div>
+          </div>
+        </div>
+      )}
 
       <div className="trades-controls-layout">
         <div className="trades-controls-main">
@@ -715,7 +825,7 @@ export function TradesView(props: TradesViewProps) {
               <input value={props.search} onChange={(event) => props.onSearchChange(event.target.value)} placeholder={t(props.language, "searchPlaceholder")} />
             </label>
           </div>
-          <div className="card trades-filters-card trades-filters-card-main">
+          {!isMobile ? <div className="card trades-filters-card trades-filters-card-main">
             <div className="trades-filters-top-actions">
               <button type="button" className="secondary slim" onClick={props.onResetFilters}>
                 {t(props.language, "reset")}
@@ -800,10 +910,10 @@ export function TradesView(props: TradesViewProps) {
                 </select>
               </label>
             </div>
-          </div>
+          </div> : null}
         </div>
 
-        <div className="card trades-inline-calendar-card" onMouseUp={props.onCalendarMouseUp} onMouseLeave={props.onCalendarMouseUp}>
+        {!isMobile ? <div className="card trades-inline-calendar-card" onMouseUp={props.onCalendarMouseUp} onMouseLeave={props.onCalendarMouseUp}>
           <div className="trades-inline-calendar-head">
             <button className="secondary slim" onClick={props.onCalendarPrevMonth}>
               ◀
@@ -858,11 +968,66 @@ export function TradesView(props: TradesViewProps) {
               );
             })}
           </div>
-        </div>
+        </div> : null}
       </div>
 
 
-      <div className="card">
+      {isMobile ? (
+        <div className="trades-mobile-cards-list">
+          {props.filteredTrades.slice(0, 500).map((trade) => {
+            const pl = getTradeRealizedPL(trade);
+            const percent = trade.kaufPreis > 0 && isTradeClosed(trade) ? (pl / trade.kaufPreis) * 100 : null;
+            return (
+              <article key={trade.id} className="card trades-mobile-card">
+                <button type="button" className="trades-mobile-card-main" onClick={() => props.onEditTrade(trade)}>
+                  <div className="trades-mobile-card-head">
+                    <span className={`trades-mobile-status ${isTradeClosed(trade) ? "closed" : "open"}`}>
+                      {isTradeClosed(trade) ? t(props.language, "closed") : t(props.language, "open")}
+                    </span>
+                    <span className="trades-mobile-type">{trade.typ}</span>
+                  </div>
+                  <strong className="trades-mobile-name">{trade.name}</strong>
+                  <div className="trades-mobile-basiswert">{trade.basiswert?.trim() ? trade.basiswert : "-"}</div>
+                  <div className="trades-mobile-grid">
+                    <span>Kauf: {money(trade.kaufPreis)}</span>
+                    <span>Verkauf: {trade.verkaufPreis ? money(trade.verkaufPreis) : "-"}</span>
+                    <span className={pl >= 0 ? "positive" : "negative"}>P&L: {trade.typ === "Steuerkorrektur" ? "-" : money(pl)}</span>
+                    <span className={percent !== null && percent >= 0 ? "positive" : "negative"}>
+                      Rendite: {percent !== null ? `${percent.toFixed(1)}%` : "-"}
+                    </span>
+                  </div>
+                </button>
+                <details className="trades-mobile-details">
+                  <summary>Details</summary>
+                  <div className="trades-mobile-details-content">
+                    <div>ISIN: {trade.isin || "-"}</div>
+                    <div>WKN: {trade.wkn || "-"}</div>
+                    <div>Quelle: {sourceLabel(trade.sourceBroker)}</div>
+                    <div>Steuern: {trade.verkaufSteuern !== undefined ? money(trade.verkaufSteuern) : "-"}</div>
+                    <div>Kaufzeit: {formatDateTimeAT(trade.kaufzeitpunkt)}</div>
+                    <div>Verkaufszeit: {formatDateTimeAT(["Steuerkorrektur", "Dividende", "Zinszahlung"].includes(trade.typ) ? trade.kaufzeitpunkt : trade.verkaufszeitpunkt)}</div>
+                    <label className="trades-mobile-check">
+                      <input
+                        type="checkbox"
+                        checked={!!trade.manualChecked}
+                        onChange={(e) => props.onToggleTradeManualChecked(trade.id, e.target.checked)}
+                      />
+                      {t(props.language, "manualChecked")}
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary slim danger-mobile"
+                      onClick={() => props.onDeleteTrade(trade.id)}
+                    >
+                      {t(props.language, "delete")}
+                    </button>
+                  </div>
+                </details>
+              </article>
+            );
+          })}
+        </div>
+      ) : <div className="card">
         <div className="table-columns-controls">
           <button className="secondary slim" onClick={() => void copyVisibleTradesToClipboard()}>
             <Copy size={14} />
@@ -961,7 +1126,134 @@ export function TradesView(props: TradesViewProps) {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
+
+      {isMobile && mobileFilterOpen ? (
+        <div className="trades-filter-panel-backdrop" onClick={() => setMobileFilterOpen(false)}>
+          <div className="trades-filter-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="trades-filter-panel-header">
+              <h3>Filter</h3>
+              <button className="secondary slim" type="button" onClick={() => setMobileFilterOpen(false)}>
+                Schließen
+              </button>
+            </div>
+            <div className="trades-filter-panel-body">
+              <label>
+                Suche
+                <input value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder={t(props.language, "searchPlaceholder")} />
+              </label>
+              <label>
+                Status
+                <div className="trades-status-switcher">
+                  {statusOptions.map((option) => (
+                    <button
+                      key={`mobile-${option.value}`}
+                      type="button"
+                      className={`trades-status-switch ${draftStatusFilter === option.value ? "is-active" : ""}`}
+                      onClick={() => setDraftStatusFilter(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <label>
+                Zeitraum
+                <select value={draftRangeFilter} onChange={(event) => setDraftRangeFilter(event.target.value as typeof draftRangeFilter)}>
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="heute">Heute</option>
+                  <option value="7">{t(props.language, "days7")}</option>
+                  <option value="30">{t(props.language, "days30")}</option>
+                  <option value="monat">Aktueller Monat</option>
+                  <option value="jahr">Aktuelles Jahr</option>
+                  <option value="365">{t(props.language, "days365")}</option>
+                </select>
+              </label>
+              <label>
+                Quelle
+                <select value={draftSourceFilter} onChange={(event) => setDraftSourceFilter(event.target.value as "Alle" | Trade["sourceBroker"])}>
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  {props.availableSources.map((source) => (
+                    <option key={`mobile-source-${source}`} value={source}>
+                      {sourceLabel(source)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Gecheckt
+                <select value={draftCheckedFilter} onChange={(event) => setDraftCheckedFilter(event.target.value as "Alle" | "Gecheckt" | "Offen")}>
+                  <option value="Alle">{t(props.language, "all")}</option>
+                  <option value="Gecheckt">{t(props.language, "manualCheckedDone")}</option>
+                  <option value="Offen">{t(props.language, "manualCheckedTodo")}</option>
+                </select>
+              </label>
+              <div className="trades-filter-group">
+                <h4>{t(props.language, "type")}</h4>
+                <div className="trades-filter-scroll-list">
+                  {props.availableTypes.map((value) => {
+                    const selected = draftTypFilter.includes(value);
+                    return (
+                      <label key={`mobile-type-${value}`} className="trades-filter-check-row">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() =>
+                            setDraftTypFilter((prev) => (prev.includes(value) ? prev.filter((entry) => entry !== value) : [...prev, value]))
+                          }
+                        />
+                        <span>{value}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="trades-filter-group">
+                <h4>{t(props.language, "basiswert")}</h4>
+                <div className="trades-filter-scroll-list">
+                  {props.availableBasiswerte.map((value) => {
+                    const selected = draftBasiswertFilter.includes(value);
+                    return (
+                      <label key={`mobile-basiswert-${value}`} className="trades-filter-check-row">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() =>
+                            setDraftBasiswertFilter((prev) => (prev.includes(value) ? prev.filter((entry) => entry !== value) : [...prev, value]))
+                          }
+                        />
+                        <span>{value}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="trades-filter-panel-footer">
+              <button className="secondary" type="button" onClick={resetMobileFilters}>
+                Zurücksetzen
+              </button>
+              <button className="primary" type="button" onClick={applyMobileFilters}>
+                Anwenden ({props.filteredTrades.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isMobile && !mobileFilterOpen ? (
+        <div className="trades-mobile-sticky-bar" role="toolbar" aria-label={t(props.language, "tradesTitle")}>
+          <button className="secondary trades-mobile-sticky-bar-filter" type="button" onClick={() => setMobileFilterOpen(true)}>
+            <Filter size={18} aria-hidden />
+            <span>{t(props.language, "importStep4FilterLabel")}</span>
+            {activeFilterCount > 0 ? <span className="trades-filter-count-badge">{activeFilterCount}</span> : null}
+          </button>
+          <button className="primary trades-mobile-sticky-bar-new" type="button" onClick={props.onGoToNewTrade}>
+            <Plus size={18} aria-hidden />
+            {t(props.language, "newTrade")}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
