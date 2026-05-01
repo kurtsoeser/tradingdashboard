@@ -40,7 +40,7 @@ import { loadAiKnowledgeFromStorage, saveAiKnowledgeToStorage } from "./lib/aiKn
 import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
 import { toIsoWeekKey, toLocalYmd } from "./lib/journalIsoWeek";
 import { buildReconcileRows } from "./lib/isinWknReconcile";
-import { loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/cloudStorage";
+import { fetchCloudDataRevision, loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/cloudStorage";
 import {
   assignLegacyLegs,
   cloneBookings,
@@ -191,6 +191,7 @@ export default function App() {
   const [bookingDraft, setBookingDraft] = useState<TradePositionBooking[]>([]);
   /** Stabile Trade-ID für Autospeichern bei neuem Trade (ohne Bearbeitungsmodus). */
   const newTradeDraftIdRef = useRef<string | null>(null);
+  const cloudDataRevisionRef = useRef<number | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
   const [checkedFilter, setCheckedFilter] = useState<"Alle" | "Gecheckt" | "Offen">("Alle");
@@ -229,11 +230,17 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudHydrating, setCloudHydrating] = useState(false);
-  const [manualCloudSaveBusy, setManualCloudSaveBusy] = useState(false);
   const [cloudPullBusy, setCloudPullBusy] = useState(false);
   const [cloudSourceState, setCloudSourceState] = useState<CloudSourceState>("unknown");
   const [lastCloudSaveAt, setLastCloudSaveAt] = useState<number | null>(null);
   const [lastCloudSaveError, setLastCloudSaveError] = useState<string | null>(null);
+  const [cloudDataRevision, setCloudDataRevision] = useState<number | null>(null);
+  const [cloudDataRevisionAt, setCloudDataRevisionAt] = useState<string | null>(null);
+  const [cloudRemoteRevisionAhead, setCloudRemoteRevisionAhead] = useState(false);
+
+  useEffect(() => {
+    cloudDataRevisionRef.current = cloudDataRevision;
+  }, [cloudDataRevision]);
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
@@ -361,6 +368,9 @@ export default function App() {
     saveAiKnowledgeToStorage(remote.aiKnowledgeBase ?? "");
     if (remote.appSettings) setAppSettings({ ...defaultAppSettings, ...remote.appSettings });
     if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
+    setCloudDataRevision(remote.cloudDataRevision ?? 0);
+    setCloudDataRevisionAt(remote.cloudDataRevisionAt ?? null);
+    setCloudRemoteRevisionAhead(false);
   }, []);
 
   const kpis = useMemo(() => getKpis(trades), [trades]);
@@ -415,6 +425,9 @@ export default function App() {
       setCloudSourceState("unknown");
       setLastCloudSaveAt(null);
       setLastCloudSaveError(null);
+      setCloudDataRevision(null);
+      setCloudDataRevisionAt(null);
+      setCloudRemoteRevisionAhead(false);
       return;
     }
     let cancelled = false;
@@ -426,9 +439,14 @@ export default function App() {
         if (remote) {
           applyRemoteSnapshotToAppState(remote);
         } else {
-          await saveCloudSnapshot(userId, buildSnapshot());
+          const rev = await saveCloudSnapshot(userId, buildSnapshot());
           setCloudSourceState("new-cloud");
           setLastCloudSaveAt(Date.now());
+          if (rev) {
+            setCloudDataRevision(rev.cloudDataRevision);
+            setCloudDataRevisionAt(rev.cloudDataRevisionAt);
+            setCloudRemoteRevisionAhead(false);
+          }
         }
         setCloudReady(true);
       } catch (error) {
@@ -447,9 +465,14 @@ export default function App() {
     if (!userId || !cloudReady || cloudHydrating) return;
     const id = window.setTimeout(() => {
       void saveCloudSnapshot(userId, buildSnapshot())
-        .then(() => {
+        .then((rev) => {
           setLastCloudSaveAt(Date.now());
           setLastCloudSaveError(null);
+          if (rev) {
+            setCloudDataRevision(rev.cloudDataRevision);
+            setCloudDataRevisionAt(rev.cloudDataRevisionAt);
+            setCloudRemoteRevisionAhead(false);
+          }
         })
         .catch((error) => {
           console.error("Cloud save failed:", error);
@@ -459,30 +482,28 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [userId, cloudReady, cloudHydrating, trades, assetMeta, journalData, aiKnowledgeBase, appSettings, theme]);
 
-  const triggerManualCloudSave = async () => {
-    if (!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy) return;
-    setManualCloudSaveBusy(true);
-    try {
-      await saveCloudSnapshot(userId, buildSnapshot());
-      setLastCloudSaveAt(Date.now());
-      setLastCloudSaveError(null);
-    } catch (error) {
-      console.error("Manual cloud save failed:", error);
-      const message = formatCloudError(error);
-      setLastCloudSaveError(message);
-      window.alert(
-        appSettings.language === "en"
-          ? `Manual cloud sync failed:\n\n${message}`
-          : `Manuelle Cloud-Synchronisierung fehlgeschlagen:\n\n${message}`
-      );
-    } finally {
-      setManualCloudSaveBusy(false);
-    }
-  };
+  /** Wenn der Tab wieder sichtbar wird: prüfen, ob die Cloud-Revision höher ist (z. B. anderes Gerät hat gespeichert). */
+  useEffect(() => {
+    if (!userId || !cloudReady) return;
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      void (async () => {
+        const meta = await fetchCloudDataRevision(userId);
+        if (!meta) return;
+        const local = cloudDataRevisionRef.current ?? 0;
+        if (meta.cloudDataRevision > local) setCloudRemoteRevisionAhead(true);
+      })();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [userId, cloudReady]);
 
-  /** Liest den aktuellen Stand aus Supabase und ersetzt den lokalen App-Zustand (wie Seitenreload nach Login). */
-  const triggerPullFromCloud = async () => {
-    if (!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy) return;
+  /**
+   * Liest den aktuellen Stand aus Supabase und ersetzt den lokalen App-Zustand (wie Seitenreload nach Login).
+   * Hochladen lokaler Änderungen erfolgt weiter automatisch nach Bearbeitung (debounced Save).
+   */
+  const triggerSyncFromCloud = async () => {
+    if (!userId || !cloudReady || cloudHydrating || cloudPullBusy) return;
     setCloudPullBusy(true);
     setCloudHydrating(true);
     setLastCloudSaveError(null);
@@ -522,6 +543,12 @@ export default function App() {
     });
   }, [lastCloudSaveAt, appSettings.language]);
   const syncBadge = useMemo(() => {
+    const revSuffix =
+      cloudDataRevision == null
+        ? ""
+        : appSettings.language === "en"
+        ? ` Cloud rev. ${cloudDataRevision}.`
+        : ` Cloud-Rev. ${cloudDataRevision}.`;
     if (cloudHydrating) {
       return {
         tone: "neutral" as const,
@@ -536,14 +563,30 @@ export default function App() {
         detail: lastCloudSaveError
       };
     }
+    if (cloudRemoteRevisionAhead) {
+      const tabRev =
+        cloudDataRevision != null
+          ? appSettings.language === "en"
+            ? `This tab is at rev. ${cloudDataRevision}. `
+            : `Dieser Tab: Rev. ${cloudDataRevision}. `
+          : "";
+      return {
+        tone: "warn" as const,
+        label: appSettings.language === "en" ? "Sync: cloud newer" : "Sync: Cloud neuer",
+        detail:
+          appSettings.language === "en"
+            ? `${tabRev}Supabase has a newer revision — tap „Sync“ to load. Last save: ${syncTimeLabel}.`
+            : `${tabRev}In Supabase liegt eine höhere Revision — „Synchronisieren“ antippen. Letzter Save: ${syncTimeLabel}.`
+      };
+    }
     if (cloudSourceState === "local-fallback") {
       return {
         tone: "warn" as const,
         label: appSettings.language === "en" ? "Sync: local fallback" : "Sync: lokaler Fallback",
         detail:
           appSettings.language === "en"
-            ? `Cloud looked empty; local browser data is used. Last save: ${syncTimeLabel}.`
-            : `Cloud wirkte leer; lokale Browser-Daten aktiv. Letzter Save: ${syncTimeLabel}.`
+            ? `Cloud looked empty; local browser data is used. Last save: ${syncTimeLabel}.${revSuffix}`
+            : `Cloud wirkte leer; lokale Browser-Daten aktiv. Letzter Save: ${syncTimeLabel}.${revSuffix}`
       };
     }
     if (cloudSourceState === "new-cloud") {
@@ -552,8 +595,8 @@ export default function App() {
         label: appSettings.language === "en" ? "Sync: cloud initialized" : "Sync: Cloud initialisiert",
         detail:
           appSettings.language === "en"
-            ? `Cloud was initialized from current app data. Last save: ${syncTimeLabel}.`
-            : `Cloud wurde aus den aktuellen App-Daten initialisiert. Letzter Save: ${syncTimeLabel}.`
+            ? `Cloud was initialized from current app data. Last save: ${syncTimeLabel}.${revSuffix}`
+            : `Cloud wurde aus den aktuellen App-Daten initialisiert. Letzter Save: ${syncTimeLabel}.${revSuffix}`
       };
     }
     return {
@@ -561,10 +604,18 @@ export default function App() {
       label: appSettings.language === "en" ? "Sync: cloud ok" : "Sync: Cloud OK",
       detail:
         appSettings.language === "en"
-          ? `Using cloud data. Last save: ${syncTimeLabel}.`
-          : `Cloud-Daten aktiv. Letzter Save: ${syncTimeLabel}.`
+          ? `Using cloud data. Last save: ${syncTimeLabel}.${revSuffix}`
+          : `Cloud-Daten aktiv. Letzter Save: ${syncTimeLabel}.${revSuffix}`
     };
-  }, [cloudHydrating, lastCloudSaveError, cloudSourceState, appSettings.language, syncTimeLabel]);
+  }, [
+    cloudHydrating,
+    lastCloudSaveError,
+    cloudSourceState,
+    cloudRemoteRevisionAhead,
+    cloudDataRevision,
+    appSettings.language,
+    syncTimeLabel
+  ]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -1983,40 +2034,21 @@ export default function App() {
           <button
             className="secondary slim"
             type="button"
-            onClick={() => void triggerPullFromCloud()}
-            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy}
+            onClick={() => void triggerSyncFromCloud()}
+            disabled={!userId || !cloudReady || cloudHydrating || cloudPullBusy}
             title={
               appSettings.language === "en"
-                ? "Load the latest data from Supabase into this browser. Unsaved changes in this tab may be overwritten."
-                : "Aktuellen Datenstand aus Supabase in diesen Browser laden. Ungespeicherte Änderungen in diesem Tab können überschrieben werden."
+                ? "Load the latest data from Supabase into this browser (same as after login). If the cloud has no trades but this browser does, the local copy is kept. Unsaved edits in this tab can be overwritten. Your own changes are still uploaded automatically after you edit (short delay)."
+                : "Aktuellen Datenstand aus Supabase in diesen Browser laden (wie nach dem Login). Wenn die Cloud 0 Trades hat, dieser Browser aber schon Daten hat, bleibt die lokale Kopie. Ungespeicherte Änderungen in diesem Tab können überschrieben werden. Nach Bearbeitungen speichert die App weiterhin automatisch in die Cloud (kurze Verzögerung)."
             }
           >
             {cloudPullBusy
               ? appSettings.language === "en"
-                ? "Loading…"
-                : "Lade…"
+                ? "Syncing…"
+                : "Synchronisiere…"
               : appSettings.language === "en"
-              ? "Load from Supabase"
-              : "Von Supabase laden"}
-          </button>
-          <button
-            className="secondary slim"
-            type="button"
-            onClick={() => void triggerManualCloudSave()}
-            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy}
-            title={
-              appSettings.language === "en"
-                ? "Upload the current view from this browser to Supabase (overwrite cloud with this tab)."
-                : "Aktuellen Stand aus diesem Browser nach Supabase speichern (Cloud mit diesem Tab überschreiben)."
-            }
-          >
-            {manualCloudSaveBusy
-              ? appSettings.language === "en"
-                ? "Saving…"
-                : "Speichere…"
-              : appSettings.language === "en"
-              ? "Save to cloud"
-              : "In Cloud speichern"}
+              ? "Sync"
+              : "Synchronisieren"}
           </button>
           <button className="secondary slim" onClick={handleLogout}>Logout</button>
         </div>

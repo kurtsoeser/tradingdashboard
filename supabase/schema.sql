@@ -124,8 +124,14 @@ create table if not exists public.user_settings (
   user_id uuid primary key references auth.users (id) on delete cascade,
   settings jsonb not null default '{}'::jsonb,
   theme text not null default 'dark' check (theme in ('dark', 'light')),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  cloud_data_revision bigint not null default 0,
+  cloud_data_revision_at timestamptz
 );
+
+alter table public.user_settings
+  add column if not exists cloud_data_revision bigint not null default 0,
+  add column if not exists cloud_data_revision_at timestamptz;
 
 create table if not exists public.user_ai_knowledge (
   user_id uuid primary key references auth.users (id) on delete cascade,
@@ -179,6 +185,29 @@ create trigger trg_user_app_data_updated_at
 before update on public.user_app_data
 for each row
 execute function public.set_updated_at();
+
+create or replace function public.increment_user_cloud_revision(p_user_id uuid)
+returns table(revision bigint, revision_at timestamptz)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or auth.uid() <> p_user_id then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  return query
+  update public.user_settings s
+  set
+    cloud_data_revision = coalesce(s.cloud_data_revision, 0) + 1,
+    cloud_data_revision_at = now()
+  where s.user_id = p_user_id
+  returning s.cloud_data_revision, s.cloud_data_revision_at;
+end;
+$$;
+
+grant execute on function public.increment_user_cloud_revision(uuid) to authenticated;
 
 alter table public.user_trades enable row level security;
 alter table public.user_positions enable row level security;

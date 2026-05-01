@@ -56,6 +56,41 @@ export interface CloudSnapshot {
   aiKnowledgeBase: string;
   appSettings: AppSettings;
   theme: "dark" | "light";
+  /** Monoton steigend in `user_settings.cloud_data_revision` (nach Migration); optional bis DB migriert. */
+  cloudDataRevision?: number;
+  cloudDataRevisionAt?: string | null;
+}
+
+/** Nach `saveCloudSnapshot`: neue Revisionsnummer aus der DB (atomar inkrementiert). */
+export type CloudRevisionInfo = { cloudDataRevision: number; cloudDataRevisionAt: string | null };
+
+function parseCloudRevisionValue(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return parseInt(value.trim(), 10);
+  return 0;
+}
+
+function revisionFromSettingsRow(row: Record<string, unknown> | null | undefined): CloudRevisionInfo {
+  if (!row) return { cloudDataRevision: 0, cloudDataRevisionAt: null };
+  const atRaw = row.cloud_data_revision_at;
+  const revisionAt = typeof atRaw === "string" && atRaw.length > 0 ? atRaw : null;
+  return { cloudDataRevision: parseCloudRevisionValue(row.cloud_data_revision), cloudDataRevisionAt: revisionAt };
+}
+
+/** Nur Revisionszeile lesen (leichtgewichtig für Tab-Fokus / „Cloud neuer?“). */
+export async function fetchCloudDataRevision(userId: string): Promise<CloudRevisionInfo | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("cloud_data_revision, cloud_data_revision_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[cloudStorage] cloud_data_revision lesen fehlgeschlagen (Migration ausgeführt?):", error.message);
+    return null;
+  }
+  if (!data) return null;
+  return revisionFromSettingsRow(data as Record<string, unknown>);
 }
 
 function emptySnapshot(): CloudSnapshot {
@@ -459,7 +494,11 @@ export async function loadCloudSnapshot(userId: string): Promise<CloudSnapshot |
     supabase.from("user_position_transactions").select("*").eq("user_id", userId).order("booked_at", { ascending: true }),
     supabase.from("user_asset_meta").select("*").eq("user_id", userId).order("name", { ascending: true }),
     supabase.from("user_journal_entries").select("*").eq("user_id", userId),
-    supabase.from("user_settings").select("settings,theme").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("user_settings")
+      .select("settings,theme,cloud_data_revision,cloud_data_revision_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
     supabase.from("user_ai_knowledge").select("content").eq("user_id", userId).maybeSingle()
   ]);
 
@@ -486,7 +525,12 @@ export async function loadCloudSnapshot(userId: string): Promise<CloudSnapshot |
     const legacy = await loadLegacySnapshot(userId);
     if (legacy) {
       await saveCloudSnapshot(userId, legacy);
-      return legacy;
+      const revMeta = await fetchCloudDataRevision(userId);
+      return {
+        ...legacy,
+        cloudDataRevision: revMeta?.cloudDataRevision ?? 0,
+        cloudDataRevisionAt: revMeta?.cloudDataRevisionAt ?? null
+      };
     }
     return null;
   }
@@ -524,6 +568,9 @@ export async function loadCloudSnapshot(userId: string): Promise<CloudSnapshot |
   snapshot.appSettings = ((settingsRes.data?.settings ?? {}) as AppSettings);
   snapshot.theme = settingsRes.data?.theme === "light" ? "light" : "dark";
   snapshot.aiKnowledgeBase = String(aiRes.data?.content ?? "");
+  const revMeta = revisionFromSettingsRow(settingsRes.data as Record<string, unknown> | undefined);
+  snapshot.cloudDataRevision = revMeta.cloudDataRevision;
+  snapshot.cloudDataRevisionAt = revMeta.cloudDataRevisionAt;
 
   if (ENABLE_POSITIONS_READONLY_PARITY_CHECK) {
     void runPositionsParityCheck(userId, snapshot.trades);
@@ -643,8 +690,25 @@ async function runPositionsParityCheck(userId: string, tradesForParity: Trade[])
   }
 }
 
-export async function saveCloudSnapshot(userId: string, snapshot: CloudSnapshot): Promise<void> {
-  if (!supabase) return;
+async function bumpUserCloudRevision(userId: string): Promise<CloudRevisionInfo | undefined> {
+  if (!supabase) return undefined;
+  const { data, error } = await supabase.rpc("increment_user_cloud_revision", { p_user_id: userId });
+  if (error) {
+    console.warn("[cloudStorage] increment_user_cloud_revision (Migration / RPC fehlt?):", error.message);
+    return undefined;
+  }
+  let row: Record<string, unknown> | undefined;
+  if (Array.isArray(data) && data.length > 0) row = data[0] as Record<string, unknown>;
+  else if (data && typeof data === "object" && !Array.isArray(data)) row = data as Record<string, unknown>;
+  if (!row) return undefined;
+  const rev = parseCloudRevisionValue(row.revision ?? row.cloud_data_revision);
+  const atRaw = row.revision_at ?? row.cloud_data_revision_at;
+  const cloudDataRevisionAt = typeof atRaw === "string" && atRaw.length > 0 ? atRaw : null;
+  return { cloudDataRevision: rev, cloudDataRevisionAt };
+}
+
+export async function saveCloudSnapshot(userId: string, snapshot: CloudSnapshot): Promise<CloudRevisionInfo | undefined> {
+  if (!supabase) return undefined;
   const tradesForPersist = dedupeTradesFromDb(snapshot.trades);
   const assetRows = snapshot.assetMeta.map((meta) => ({
     user_id: userId,
@@ -697,6 +761,8 @@ export async function saveCloudSnapshot(userId: string, snapshot: CloudSnapshot)
   if (ENABLE_POSITIONS_DUAL_WRITE) {
     await savePositionsDualWrite(userId, tradesForPersist);
   }
+
+  return bumpUserCloudRevision(userId);
 }
 
 function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): Array<Record<string, unknown>> {
