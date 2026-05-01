@@ -3101,7 +3101,7 @@ td.action-col {
     bottom: 0;
     z-index: 46;
     display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 0;
     border-top: 1px solid var(--border);
     background: #111114;
@@ -4715,4 +4715,100 @@ button.primary.slim.symbol-hit-assign-btn:disabled {
 .edit-asset-preview h3 {
   margin: 0 0 10px;
   font-size: 0.95rem;
+}
+
+.import-steps-card {
+  margin-top: 8px;
+}
+
+.import-steps-track {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-step-pill {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  min-height: 52px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.import-step-pill span {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+}
+
+.import-step-pill.is-active {
+  border-color: #1ba650;
+  color: var(--text);
+  background: rgba(27, 166, 80, 0.12);
+}
+
+.import-step-pill.is-done {
+  color: var(--text);
+}
+
+.import-step-content {
+  display: grid;
+  gap: 10px;
+}
+
+.import-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-step-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.import-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-step4-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-step4-filter select {
+  border: 1px solid var(--border);
+  background: #151518;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-height: 34px;
+}
+
+@media (max-width: 980px) {
+  .import-steps-track {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .import-steps-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

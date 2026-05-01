@@ -24,6 +24,7 @@ import { DashboardView } from "./components/views/DashboardView";
 import { BookingsView } from "./components/views/BookingsView";
 import { TradesView } from "./components/views/TradesView";
 import { NewTradeView } from "./components/views/NewTradeView";
+import { ImportView } from "./components/views/ImportView";
 import { AssetsView } from "./components/views/AssetsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
@@ -61,9 +62,34 @@ function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: st
 function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boolean } {
   let changed = false;
   const noBasiswertTypes = new Set<string>(["Steuerkorrektur", "Zinszahlung"]);
+  const tradeRepublicTypes = new Set<string>(["Steuerkorrektur", "Long", "Short", "Fond", "Anleihe"]);
+  const n26StocksCutoff = new Date("2025-01-15T00:00:00.000Z");
 
   const next = trades.map((trade) => {
     let t = trade;
+
+    // Migrationsregel aus Bestand:
+    // - Long/Short/Fond/Anleihe/Steuerkorrektur => Trade Republic
+    // - Aktie mit Kauf vor 15.01.2025 => N26
+    // - BAWAG-Bezug im Namen/Basiswert => BAWAG
+    if (!t.sourceBroker) {
+      const nameUpper = (t.name ?? "").toUpperCase();
+      const basiswertUpper = (t.basiswert ?? "").toUpperCase();
+      const hasBawagReference = nameUpper.includes("BAWAG") || basiswertUpper.includes("BAWAG");
+      const buyDate = parseStoredDateTime(t.kaufzeitpunkt);
+      const isN26Stock = t.typ === "Aktie" && !!buyDate && buyDate.getTime() < n26StocksCutoff.getTime();
+
+      if (hasBawagReference) {
+        t = { ...t, sourceBroker: "BAWAG" };
+        changed = true;
+      } else if (isN26Stock) {
+        t = { ...t, sourceBroker: "N26" };
+        changed = true;
+      } else if (tradeRepublicTypes.has(t.typ)) {
+        t = { ...t, sourceBroker: "TRADE_REPUBLIC" };
+        changed = true;
+      }
+    }
 
     // Globale Steuer-Cashflow-Konvention:
     // - Steuerzahlung = negativ
@@ -1495,9 +1521,14 @@ export default function App() {
     setAuthBusy(true);
     setAuthError(null);
     const email = authEmail.trim();
+    const emailRedirectTo = window.location.origin;
     try {
       if (authMode === "register") {
-        const { error } = await supabase.auth.signUp({ email, password: authPassword });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password: authPassword,
+          options: { emailRedirectTo }
+        });
         if (error) throw error;
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
@@ -1692,6 +1723,18 @@ export default function App() {
             calendarWeekdayNames={calendarWeekdayNames}
             language={appSettings.language}
             traderProviders={appSettings.traderProviders}
+          />
+        )}
+        {view === "import" && (
+          <ImportView
+            language={appSettings.language}
+            existingTradesCount={trades.length}
+            existingTrades={trades}
+            userId={userId}
+            onCommitImportedTrades={(nextTrades) => {
+              setTrades(nextTrades);
+              saveTradesToStorage(nextTrades);
+            }}
           />
         )}
         {view === "newTrade" && (

@@ -32,6 +32,9 @@ export interface TradePositionBooking {
 
 export interface Trade {
   id: string;
+  sourceBroker?: "TRADE_REPUBLIC" | "N26" | "BAWAG" | "MANUAL";
+  sourceAccount?: string;
+  externalEventId?: string;
   name: string;
   typ: TradeType | string;
   basiswert: string;

@@ -1,4 +1,4 @@
-import { BarChart3, BookMarked, CandlestickChart, ClipboardList, Database, LayoutDashboard, Moon, Route, Search, Settings2, Sparkles, Sun } from "lucide-react";
+import { BarChart3, BookMarked, CandlestickChart, ClipboardList, Database, LayoutDashboard, Moon, Route, Search, Settings2, Sparkles, Sun, Upload } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { View } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
@@ -51,6 +51,10 @@ export function SidebarNav({
           <button className={view === "trades" ? "active" : ""} onClick={() => handleViewChange("trades")}>
             <CandlestickChart size={15} />
             {t(language, "navTrades")}
+          </button>
+          <button className={view === "import" ? "active" : ""} onClick={() => handleViewChange("import")}>
+            <Upload size={15} />
+            {t(language, "navImport")}
           </button>
           <button className={view === "bookings" ? "active" : ""} onClick={() => handleViewChange("bookings")}>
             <ClipboardList size={15} />
@@ -107,6 +111,10 @@ export function SidebarNav({
         <button className={view === "trades" ? "active" : ""} onClick={() => handleViewChange("trades")} aria-label={t(language, "navTrades")}>
           <CandlestickChart size={16} />
           <span>{t(language, "navTrades")}</span>
+        </button>
+        <button className={view === "import" ? "active" : ""} onClick={() => handleViewChange("import")} aria-label={t(language, "navImport")}>
+          <Upload size={16} />
+          <span>{t(language, "navImport")}</span>
         </button>
         <button className={view === "bookings" ? "active" : ""} onClick={() => handleViewChange("bookings")} aria-label={t(language, "navBookings")}>
           <ClipboardList size={16} />

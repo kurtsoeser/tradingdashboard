@@ -80,6 +80,8 @@ function fromNullable<T>(value: T | null): T | undefined {
 interface DbPositionRow {
   position_id: string;
   legacy_trade_id?: string | null;
+  source_broker?: string | null;
+  source_account?: string | null;
   name: string;
   typ: string;
   basiswert: string;
@@ -93,6 +95,9 @@ interface DbPositionRow {
 
 interface DbPositionTxRow {
   position_id: string;
+  source_broker?: string | null;
+  source_account?: string | null;
+  external_transaction_id?: string | null;
   kind: "BUY" | "SELL" | "TAX_CORRECTION" | "INCOME";
   booked_at: string;
   qty: number | null;
@@ -194,7 +199,12 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
       const legacy = legacyId ? legacyByTradeId.get(legacyId) : undefined;
       if (legacy) {
         const posNotiz = position.notiz?.trim();
-        return posNotiz ? { ...legacy, notiz: posNotiz } : { ...legacy };
+        const next = posNotiz ? { ...legacy, notiz: posNotiz } : { ...legacy };
+        return {
+          ...next,
+          sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? next.sourceBroker,
+          sourceAccount: position.source_account ?? next.sourceAccount
+        };
       }
 
       const tx = txByPosition.get(position.position_id) ?? [];
@@ -210,6 +220,8 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
         const bookedRaw = inc?.booked_at ?? position.opened_at;
         return {
           id: stableTradeId,
+          sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
+          sourceAccount: position.source_account ?? undefined,
           name: position.name,
           typ: position.typ as Trade["typ"],
           basiswert: position.basiswert ?? "",
@@ -240,6 +252,8 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
       if (position.typ === "Steuerkorrektur") {
         return {
           id: stableTradeId,
+          sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
+          sourceAccount: position.source_account ?? undefined,
           name: position.name,
           typ: "Steuerkorrektur",
           basiswert: "",
@@ -261,6 +275,8 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
 
       return {
         id: stableTradeId,
+        sourceBroker: (position.source_broker as Trade["sourceBroker"]) ?? "MANUAL",
+        sourceAccount: position.source_account ?? undefined,
         name: position.name,
         typ: position.typ,
         basiswert: position.basiswert,
@@ -643,6 +659,8 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
     const taxLegs = assignLegacyLegs(taxOnly.length > 0 ? taxOnly : syntheticBookingsFromTrade(trade));
     return taxLegs.map((b) => ({
       user_id: userId,
+      source_broker: trade.sourceBroker ?? "MANUAL",
+      source_account: toNullable(trade.sourceAccount),
       position_id: positionId,
       kind: "TAX_CORRECTION",
       booked_at: parseLegacyDateToIso(b.bookedAtIso || b.bookedAtDisplay, `tx.TAX_CORRECTION legacy=${trade.id}`),
@@ -654,7 +672,8 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
       tax_mode: "MANUAL",
       note,
       legacy_trade_id: trade.id,
-      legacy_leg: b.legacyLeg ?? "TAX_CORRECTION"
+      legacy_leg: b.legacyLeg ?? "TAX_CORRECTION",
+      external_transaction_id: b.transactionId || trade.externalEventId || null
     }));
   }
 
@@ -679,6 +698,8 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
     const taxN = Number.isFinite(Number(b.taxAmount)) ? Number(b.taxAmount) : 0;
     return {
       user_id: userId,
+      source_broker: trade.sourceBroker ?? "MANUAL",
+      source_account: toNullable(trade.sourceAccount),
       position_id: positionId,
       kind,
       booked_at: parseLegacyDateToIso(b.bookedAtIso || b.bookedAtDisplay, `tx.${kind} legacy=${trade.id}`),
@@ -690,7 +711,8 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
       tax_mode: "MANUAL",
       note,
       legacy_trade_id: trade.id,
-      legacy_leg: b.legacyLeg ?? (kind === "BUY" ? "BUY" : kind === "SELL" ? "SELL" : "INCOME")
+      legacy_leg: b.legacyLeg ?? (kind === "BUY" ? "BUY" : kind === "SELL" ? "SELL" : "INCOME"),
+      external_transaction_id: b.transactionId || trade.externalEventId || null
     };
   });
 }
@@ -745,6 +767,8 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
         : null;
     return {
       user_id: userId,
+      source_broker: trade.sourceBroker ?? "MANUAL",
+      source_account: toNullable(trade.sourceAccount),
       name: trade.name,
       typ: trade.typ,
       basiswert: trade.basiswert ?? "",

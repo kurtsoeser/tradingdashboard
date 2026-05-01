@@ -3,6 +3,7 @@ import type { Trade, TradeStatus } from "../types/trade";
 export type View =
   | "dashboard"
   | "trades"
+  | "import"
   | "bookings"
   | "newTrade"
   | "assets"
