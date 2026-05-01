@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import type { Trade, TradePositionBooking } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
@@ -230,6 +230,7 @@ export default function App() {
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudHydrating, setCloudHydrating] = useState(false);
   const [manualCloudSaveBusy, setManualCloudSaveBusy] = useState(false);
+  const [cloudPullBusy, setCloudPullBusy] = useState(false);
   const [cloudSourceState, setCloudSourceState] = useState<CloudSourceState>("unknown");
   const [lastCloudSaveAt, setLastCloudSaveAt] = useState<number | null>(null);
   const [lastCloudSaveError, setLastCloudSaveError] = useState<string | null>(null);
@@ -328,6 +329,40 @@ export default function App() {
     theme
   });
 
+  /** Wendet einen von `loadCloudSnapshot` gelieferten Stand an (wie beim ersten Login). */
+  const applyRemoteSnapshotToAppState = useCallback((remote: CloudSnapshot) => {
+    const remoteTradeArr = Array.isArray(remote.trades) ? remote.trades : [];
+    const normalizedFromRemote = normalizeTradesOnLoad(remoteTradeArr).trades;
+    const localBackup = loadTradesFromStorage();
+    const usingLocalFallback = normalizedFromRemote.length === 0 && localBackup.length > 0;
+    const normalizedTrades = usingLocalFallback
+      ? normalizeTradesOnLoad(localBackup).trades
+      : normalizedFromRemote;
+    const legacyCheckedIds = new Set<string>(
+      Array.isArray(remote.appSettings?.manualCheckedTradeIds) ? remote.appSettings.manualCheckedTradeIds : []
+    );
+    const hydratedTrades = normalizedTrades.map((trade) => ({
+      ...trade,
+      manualChecked: !!trade.manualChecked || legacyCheckedIds.has(trade.id)
+    }));
+    if (normalizedFromRemote.length === 0 && localBackup.length > 0) {
+      console.warn(
+        "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
+      );
+    }
+    setCloudSourceState(usingLocalFallback ? "local-fallback" : "cloud");
+    setTrades(hydratedTrades);
+    saveTradesToStorage(hydratedTrades);
+    setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
+    saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
+    setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
+    saveJournalToStorage(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
+    setAiKnowledgeBase(remote.aiKnowledgeBase ?? "");
+    saveAiKnowledgeToStorage(remote.aiKnowledgeBase ?? "");
+    if (remote.appSettings) setAppSettings({ ...defaultAppSettings, ...remote.appSettings });
+    if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
+  }, []);
+
   const kpis = useMemo(() => getKpis(trades), [trades]);
   useEffect(() => {
     const timer = window.setInterval(() => setDashboardNow(new Date()), 1000);
@@ -389,37 +424,7 @@ export default function App() {
         const remote = await loadCloudSnapshot(userId);
         if (cancelled) return;
         if (remote) {
-          const remoteTradeArr = Array.isArray(remote.trades) ? remote.trades : [];
-          const normalizedFromRemote = normalizeTradesOnLoad(remoteTradeArr).trades;
-          const localBackup = loadTradesFromStorage();
-          const usingLocalFallback = normalizedFromRemote.length === 0 && localBackup.length > 0;
-          const normalizedTrades =
-            usingLocalFallback
-              ? normalizeTradesOnLoad(localBackup).trades
-              : normalizedFromRemote;
-          const legacyCheckedIds = new Set<string>(
-            Array.isArray(remote.appSettings?.manualCheckedTradeIds) ? remote.appSettings.manualCheckedTradeIds : []
-          );
-          const hydratedTrades = normalizedTrades.map((trade) => ({
-            ...trade,
-            manualChecked: !!trade.manualChecked || legacyCheckedIds.has(trade.id)
-          }));
-          if (normalizedFromRemote.length === 0 && localBackup.length > 0) {
-            console.warn(
-              "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
-            );
-          }
-          setCloudSourceState(usingLocalFallback ? "local-fallback" : "cloud");
-          setTrades(hydratedTrades);
-          saveTradesToStorage(hydratedTrades);
-          setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
-          saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
-          setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
-          saveJournalToStorage(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
-          setAiKnowledgeBase(remote.aiKnowledgeBase ?? "");
-          saveAiKnowledgeToStorage(remote.aiKnowledgeBase ?? "");
-          if (remote.appSettings) setAppSettings({ ...defaultAppSettings, ...remote.appSettings });
-          if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
+          applyRemoteSnapshotToAppState(remote);
         } else {
           await saveCloudSnapshot(userId, buildSnapshot());
           setCloudSourceState("new-cloud");
@@ -437,7 +442,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, applyRemoteSnapshotToAppState]);
   useEffect(() => {
     if (!userId || !cloudReady || cloudHydrating) return;
     const id = window.setTimeout(() => {
@@ -472,6 +477,39 @@ export default function App() {
       );
     } finally {
       setManualCloudSaveBusy(false);
+    }
+  };
+
+  /** Liest den aktuellen Stand aus Supabase und ersetzt den lokalen App-Zustand (wie Seitenreload nach Login). */
+  const triggerPullFromCloud = async () => {
+    if (!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy) return;
+    setCloudPullBusy(true);
+    setCloudHydrating(true);
+    setLastCloudSaveError(null);
+    try {
+      const remote = await loadCloudSnapshot(userId);
+      if (!remote) {
+        window.alert(
+          appSettings.language === "en"
+            ? "No cloud data found for this account. Log in on a device where you already use the app, or import a backup."
+            : "Für dieses Konto wurden keine Cloud-Daten gefunden. Melde dich auf einem Gerät an, auf dem du die App schon nutzt, oder importiere ein Backup."
+        );
+        return;
+      }
+      applyRemoteSnapshotToAppState(remote);
+      setLastCloudSaveAt(Date.now());
+    } catch (error) {
+      console.error("Pull from cloud failed:", error);
+      const message = formatCloudError(error);
+      setLastCloudSaveError(message);
+      window.alert(
+        appSettings.language === "en"
+          ? `Loading from Supabase failed:\n\n${message}`
+          : `Laden von Supabase fehlgeschlagen:\n\n${message}`
+      );
+    } finally {
+      setCloudHydrating(false);
+      setCloudPullBusy(false);
     }
   };
 
@@ -1944,17 +1982,41 @@ export default function App() {
           </span>
           <button
             className="secondary slim"
+            type="button"
+            onClick={() => void triggerPullFromCloud()}
+            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy}
+            title={
+              appSettings.language === "en"
+                ? "Load the latest data from Supabase into this browser. Unsaved changes in this tab may be overwritten."
+                : "Aktuellen Datenstand aus Supabase in diesen Browser laden. Ungespeicherte Änderungen in diesem Tab können überschrieben werden."
+            }
+          >
+            {cloudPullBusy
+              ? appSettings.language === "en"
+                ? "Loading…"
+                : "Lade…"
+              : appSettings.language === "en"
+              ? "Load from Supabase"
+              : "Von Supabase laden"}
+          </button>
+          <button
+            className="secondary slim"
+            type="button"
             onClick={() => void triggerManualCloudSave()}
-            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy}
-            title={appSettings.language === "en" ? "Manually trigger cloud save" : "Speichern nach Supabase manuell auslösen"}
+            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy || cloudPullBusy}
+            title={
+              appSettings.language === "en"
+                ? "Upload the current view from this browser to Supabase (overwrite cloud with this tab)."
+                : "Aktuellen Stand aus diesem Browser nach Supabase speichern (Cloud mit diesem Tab überschreiben)."
+            }
           >
             {manualCloudSaveBusy
               ? appSettings.language === "en"
-                ? "Syncing..."
-                : "Synchronisiere..."
+                ? "Saving…"
+                : "Speichere…"
               : appSettings.language === "en"
-              ? "Sync now"
-              : "Jetzt synchronisieren"}
+              ? "Save to cloud"
+              : "In Cloud speichern"}
           </button>
           <button className="secondary slim" onClick={handleLogout}>Logout</button>
         </div>
