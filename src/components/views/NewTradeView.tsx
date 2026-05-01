@@ -62,6 +62,7 @@ interface NewTradeViewProps {
   statusClosed: boolean;
   differenz: number;
   steuerBetrag: number;
+  gesamtGebuehren: number;
   gewinn: number;
   rendite: number;
   haltedauer: number;
@@ -87,6 +88,7 @@ export function NewTradeView({
   statusClosed,
   differenz,
   steuerBetrag,
+  gesamtGebuehren,
   gewinn,
   rendite,
   haltedauer,
@@ -262,8 +264,12 @@ export function NewTradeView({
   const verkaufSteuernFormStr = String(form.verkaufSteuern ?? "").trim();
   const verkaufSteuernValue =
     verkaufSteuernFormStr === ""
-      ? steuerpflichtigerGewinnValue * 0.275
-      : (parseLocaleDecimal(verkaufSteuernFormStr, numberLocale) ?? Number.parseFloat(verkaufSteuernFormStr)) || 0;
+      ? -steuerpflichtigerGewinnValue * 0.275
+      : (() => {
+          const parsed =
+            (parseLocaleDecimal(verkaufSteuernFormStr, numberLocale) ?? Number.parseFloat(verkaufSteuernFormStr)) || 0;
+          return parsed > 0 ? -parsed : parsed;
+        })();
   const verkaufGebuehrenValue = Number.parseFloat(form.verkaufGebuehren) || 0;
   const kaufPreisCalculated = stueckValue > 0 ? kaufTransaktionValue + kaufGebuehrenValue : 0;
   const kaufPreisManuellValue = Number.parseFloat(form.kaufPreisManuell);
@@ -469,8 +475,11 @@ export function NewTradeView({
       setForm((prev) => ({ ...prev, verkaufPreisManuell: "" }));
       return;
     }
-    const nextSellPrice = kaufPreisEffektiv + parsed;
-    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+    // Neue Logik:
+    // Differenz = Verkaufstransaktion - Kauftransaktion (steuerliche Bemessungsgrundlage)
+    const desiredSellTx = kaufTransaktionValue + parsed;
+    const nextSellPrice = desiredSellTx - verkaufGebuehrenValue;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: Number.isFinite(nextSellPrice) ? nextSellPrice.toFixed(2) : "" }));
   };
 
   const handleGewinnInput = (raw: string) => {
@@ -479,8 +488,14 @@ export function NewTradeView({
       setForm((prev) => ({ ...prev, verkaufPreisManuell: "" }));
       return;
     }
-    const nextSellPrice = kaufPreisEffektiv + parsed - verkaufSteuernValue;
-    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+    // Gewinn = Differenz + Steuer - Gebühren gesamt
+    // => Differenz = Gewinn - Steuer + Gebühren gesamt
+    // => Verkaufstransaktion = Kauftransaktion + Differenz
+    const totalFees = kaufGebuehrenValue + verkaufGebuehrenValue;
+    const targetDifferenz = parsed - verkaufSteuernValue + totalFees;
+    const desiredSellTx = kaufTransaktionValue + targetDifferenz;
+    const nextSellPrice = desiredSellTx - verkaufGebuehrenValue;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: Number.isFinite(nextSellPrice) ? nextSellPrice.toFixed(2) : "" }));
   };
 
   const handleRenditeInput = (raw: string) => {
@@ -490,8 +505,11 @@ export function NewTradeView({
       return;
     }
     const nextGewinn = kaufPreisEffektiv * (parsed / 100);
-    const nextSellPrice = kaufPreisEffektiv + nextGewinn - verkaufSteuernValue;
-    setForm((prev) => ({ ...prev, verkaufPreisManuell: nextSellPrice.toFixed(2) }));
+    const totalFees = kaufGebuehrenValue + verkaufGebuehrenValue;
+    const targetDifferenz = nextGewinn - verkaufSteuernValue + totalFees;
+    const desiredSellTx = kaufTransaktionValue + targetDifferenz;
+    const nextSellPrice = desiredSellTx - verkaufGebuehrenValue;
+    setForm((prev) => ({ ...prev, verkaufPreisManuell: Number.isFinite(nextSellPrice) ? nextSellPrice.toFixed(2) : "" }));
   };
 
   const handleRecalculateResult = () => {
@@ -1244,7 +1262,7 @@ export function NewTradeView({
           <div className="form-grid">
             <>
               <label className="field-span-full calc-right-row">
-                {renderResultLabel(t(language, "differenceEur"), "Differenz = Verkaufserlös vor Steuer - Kaufpreis.")}
+                {renderResultLabel(t(language, "differenceEur"), "Differenz = Verkaufstransaktion - Kauftransaktion (Steuergrundlage).")}
                 <input
                   type="number"
                   step="0.01"
@@ -1254,18 +1272,22 @@ export function NewTradeView({
                 />
               </label>
               <label className="field-span-full calc-right-row">
-                {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung aus (Verkaufstransaktion - Kauftransaktion) × Steuersatz.")}
+                {renderResultLabel(t(language, "taxEur"), "Steuer = manuelle Eingabe oder automatische Berechnung aus Differenz × Steuersatz.")}
                 <input
                   type="number"
                   step="0.01"
                   value={form.verkaufSteuern}
                   onChange={(e) => setForm((prev) => ({ ...prev, verkaufSteuern: e.target.value }))}
-                  placeholder={verkaufTransaktionValue > 0 ? money(steuerpflichtigerGewinnValue * 0.275) : "0,00"}
+                  placeholder={verkaufTransaktionValue > 0 ? money(-steuerpflichtigerGewinnValue * 0.275) : "0,00"}
                 />
+              </label>
+              <label className="field-span-full calc-right-row">
+                {renderResultLabel("Gebühren gesamt (EUR)", "Gebühren gesamt = Kaufgebühren + Verkaufsgebühren.")}
+                <input type="number" step="0.01" value={Number.isFinite(gesamtGebuehren) ? gesamtGebuehren.toFixed(2) : ""} readOnly />
               </label>
               <div className="calc-separator field-span-full" aria-hidden="true" />
               <label className="field-span-full calc-right-row">
-                {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer.")}
+                {renderResultLabel(t(language, "profitEur"), "Gewinn = Differenz + Steuer - Gebühren gesamt.")}
                 <input
                   type="number"
                   step="0.01"

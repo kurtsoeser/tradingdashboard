@@ -218,6 +218,8 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
         const inc = incomeRows[0];
         const gross = inc ? Number(inc.gross_amount ?? 0) : 0;
         const taxAmt = inc ? Number(inc.tax_amount ?? 0) : 0;
+        // App-Konvention: Steuerzahlung negativ, Erstattung positiv.
+        const taxCashflow = taxAmt > 0 ? -taxAmt : taxAmt;
         const bookedRaw = inc?.booked_at ?? position.opened_at;
         return {
           id: stableTradeId,
@@ -233,8 +235,8 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
           kaufzeitpunkt: toAppDisplayDateTime(bookedRaw),
           kaufPreis: 0,
           verkaufTransaktionManuell: gross > 0 ? gross : undefined,
-          verkaufSteuern: taxAmt,
-          verkaufPreis: gross + taxAmt,
+          verkaufSteuern: taxCashflow,
+          verkaufPreis: gross + taxCashflow,
           status: "Geschlossen"
         };
       }
@@ -273,7 +275,11 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
       const closed = position.status === "CLOSED";
       const buyPrice = buyGross + buyFees;
       const sellProceeds = sellGross - sellFees;
-      const sellTotal = closed ? sellProceeds + sellTaxes : undefined;
+      // SELL.tax_amount ist in DB >= 0 (Steuerlast).
+      // Für die App gilt: Steuerlast als negativer Cashflow.
+      // TAX_CORRECTION bleibt mit Vorzeichen aus DB erhalten (+ Erstattung / - Nachzahlung).
+      const tradeTaxCashflow = -sellTaxes + taxCorrections;
+      const sellTotal = closed ? sellProceeds + tradeTaxCashflow : undefined;
       const qty = buyQty > 0 ? (closed ? buyQty : Math.max(0, buyQty - sellQty)) : undefined;
 
       return {
@@ -297,7 +303,7 @@ function fromDbPositionsSnapshot(positions: DbPositionRow[], txRows: DbPositionT
         verkaufPreis: sellTotal,
         verkaufStueckpreis: closed && sellQty > 0 ? sellGross / sellQty : undefined,
         verkaufTransaktionManuell: closed && sellGross > 0 ? sellGross : undefined,
-        verkaufSteuern: closed ? sellTaxes + taxCorrections : undefined,
+        verkaufSteuern: closed ? tradeTaxCashflow : undefined,
         verkaufGebuehren: closed && sellFees > 0 ? sellFees : undefined,
         gewinn: closed && sellTotal !== undefined ? sellTotal - buyPrice : undefined,
         status: closed ? "Geschlossen" : "Offen"
@@ -689,7 +695,28 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
   }
 
   const legs = assignLegacyLegs(sourceRows);
-  return legs.map((b) => {
+  // Auto-Repair:
+  // Für normale Trades (BUY/SELL) den Trade-Steuerwert auf SELL-Legs zurückspiegeln.
+  // So werden ältere, inkonsistente booking.taxAmount-Werte beim nächsten Speichern
+  // automatisch bereinigt (ohne manuelle Einzelkorrektur im UI).
+  let repairedLegs = legs;
+  if (trade.typ !== "Steuerkorrektur" && trade.typ !== "Dividende" && trade.typ !== "Zinszahlung") {
+    const sellIdx: number[] = [];
+    for (let i = 0; i < repairedLegs.length; i++) {
+      if (repairedLegs[i].kind === "SELL") sellIdx.push(i);
+    }
+    if (sellIdx.length > 0) {
+      const desiredSellTaxTotal = Math.max(0, Math.abs(Number(trade.verkaufSteuern ?? 0)));
+      let currentOtherSellTaxes = 0;
+      for (let i = 0; i < sellIdx.length - 1; i++) {
+        currentOtherSellTaxes += Math.max(0, Number(repairedLegs[sellIdx[i]].taxAmount ?? 0));
+      }
+      const lastSellIdx = sellIdx[sellIdx.length - 1]!;
+      const nextLastSellTax = Math.max(0, desiredSellTaxTotal - currentOtherSellTaxes);
+      repairedLegs = repairedLegs.map((row, idx) => (idx === lastSellIdx ? { ...row, taxAmount: nextLastSellTax } : row));
+    }
+  }
+  return repairedLegs.map((b) => {
     const kind = b.kind;
     const qtyRaw = kind === "TAX_CORRECTION" || kind === "INCOME" ? null : b.qty ?? null;
     const unitRaw = kind === "TAX_CORRECTION" || kind === "INCOME" ? null : b.unitPrice ?? null;

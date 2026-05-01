@@ -1131,9 +1131,10 @@ export default function App() {
   const kaufPreisEffective = isCashflowType && !hasKaufData ? 0 : kaufPreis;
   const kaufGebuehrenEffective = isCashflowType && !hasKaufData ? 0 : kaufGebuehren;
 
-  const gewinn = statusClosed ? verkaufPreis - kaufPreisEffective : 0;
-  const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufErlosVorSteuer - kaufPreisEffective) : 0;
+  const differenz = statusClosed ? (isIncomeType ? incomeGrossInput : verkaufTransaktion - kaufTransaktion) : 0;
   const steuerBetrag = statusClosed ? verkaufSteuern : 0;
+  const gesamtGebuehren = statusClosed ? (isIncomeType ? 0 : kaufGebuehrenEffective + verkaufGebuehrenEffective) : 0;
+  const gewinn = statusClosed ? (isIncomeType ? incomeNet : differenz + steuerBetrag - gesamtGebuehren) : 0;
   const rendite = kaufPreisEffective > 0 ? (gewinn / kaufPreisEffective) * 100 : 0;
   const haltedauer =
     statusClosed && form.verkaufszeitpunkt ? daysBetween(form.kaufzeitpunkt, form.verkaufszeitpunkt) : 0;
@@ -1250,7 +1251,7 @@ export default function App() {
                 // (sonst verwirft jedes Speichern/Autosave die erfassten Verkäufe).
                 const hasSellLegs = bookingDraft.some((r) => r.kind === "SELL");
                 if (hasSellLegs) {
-                  let rows = cloneBookings(bookingDraft);
+                  let rows = applyResolvedSellTaxToBookings(cloneBookings(bookingDraft), verkaufSteuernResolved);
                   if (verkaufLocalForStore?.trim()) {
                     rows = syncLastSellBookingTimeFromForm(rows, verkaufLocalForStore);
                   }
@@ -1260,7 +1261,8 @@ export default function App() {
                 return withoutSells.length > 0 ? cloneBookings(withoutSells) : syntheticBookingsFromTrade(nextBase);
               }
               if (bookingDraft.length > 0) {
-                return syncLastSellBookingTimeFromForm(cloneBookings(bookingDraft), verkaufLocalForStore);
+                const withTax = applyResolvedSellTaxToBookings(cloneBookings(bookingDraft), verkaufSteuernResolved);
+                return syncLastSellBookingTimeFromForm(withTax, verkaufLocalForStore);
               }
               return syntheticBookingsFromTrade(nextBase);
             })()
@@ -1286,6 +1288,30 @@ export default function App() {
 
   const saveNewTrade = () => {
     persistTradeFromForm(true);
+  };
+
+  /**
+   * Synchronisiert den Steuerwert aus dem Formular in die SELL-Buchungen,
+   * damit beim Reload nicht ein alter SELL-taxAmount den neuen Wert überschreibt.
+   */
+  const applyResolvedSellTaxToBookings = (
+    rows: TradePositionBooking[],
+    resolvedTradeTax: number | undefined
+  ): TradePositionBooking[] => {
+    if (!rows.length) return rows;
+    const sellIdx: number[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].kind === "SELL") sellIdx.push(i);
+    }
+    if (sellIdx.length === 0) return rows;
+    const desiredTotal = Math.max(0, Math.abs(Number(resolvedTradeTax ?? 0)));
+    let sumOtherSellTaxes = 0;
+    for (let i = 0; i < sellIdx.length - 1; i++) {
+      sumOtherSellTaxes += Math.max(0, Number(rows[sellIdx[i]].taxAmount ?? 0));
+    }
+    const lastSellIdx = sellIdx[sellIdx.length - 1]!;
+    const nextLastSellTax = Math.max(0, desiredTotal - sumOtherSellTaxes);
+    return rows.map((row, idx) => (idx === lastSellIdx ? { ...row, taxAmount: nextLastSellTax } : row));
   };
 
   const autoSaveTradeRef = useRef<() => void>(() => {});
@@ -1919,6 +1945,7 @@ export default function App() {
             statusClosed={statusClosed}
             differenz={differenz}
             steuerBetrag={steuerBetrag}
+            gesamtGebuehren={gesamtGebuehren}
             gewinn={gewinn}
             rendite={rendite}
             haltedauer={haltedauer}

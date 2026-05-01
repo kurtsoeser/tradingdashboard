@@ -331,9 +331,9 @@ const de: Dict = {
   interestFormSavedHintBody:
     "Die Zinszahlung erscheint in der Trade-Liste und wird bei Cloud-Sync als Position mit Ertrags-Buchung gespeichert.",
   result: "Ergebnis",
-  differenceEur: "Differenz (EUR)",
+  differenceEur: "Steuergrundlage (EUR)",
   taxEur: "Steuer (EUR)",
-  profitEur: "Gewinn (EUR)",
+  profitEur: "Netto-Gewinn (EUR)",
   returnPct: "Rendite (%)",
   holdDays: "Haltedauer (Tage)",
   assetHistory: "Historie Basiswert",
@@ -1173,9 +1173,9 @@ const en: Dict = {
   interestFormSavedHintBody:
     "The interest entry appears in the trade list and syncs to the cloud as a position with an income booking.",
   result: "Result",
-  differenceEur: "Difference (EUR)",
+  differenceEur: "Tax base (EUR)",
   taxEur: "Tax (EUR)",
-  profitEur: "Profit (EUR)",
+  profitEur: "Net profit (EUR)",
   returnPct: "Return (%)",
   holdDays: "Holding period (days)",
   assetHistory: "Underlying history",
