@@ -108,6 +108,46 @@ interface DbPositionTxRow {
   tax_amount: number;
 }
 
+type TxRowPayload = Record<string, unknown>;
+
+function txRowConflictKey(row: TxRowPayload): string {
+  return `${String(row.user_id ?? "")}::${String(row.legacy_trade_id ?? "")}::${String(row.legacy_leg ?? "")}`;
+}
+
+function normalizeExternalTransactionId(value: unknown): string | null {
+  const v = String(value ?? "").trim();
+  return v.length > 0 ? v : null;
+}
+
+/**
+ * PostgREST upsert (onConflict) wirft 409, wenn derselbe Konflikt-Schlüssel innerhalb EINER
+ * Request-Payload mehrfach vorkommt ("cannot affect row a second time").
+ * Deshalb deduplizieren wir vor dem Upsert strikt nach (user_id, legacy_trade_id, legacy_leg).
+ */
+function dedupeTxRowsByConflictKey(rows: TxRowPayload[]): TxRowPayload[] {
+  const byKey = new Map<string, TxRowPayload>();
+  for (const row of rows) {
+    const key = txRowConflictKey(row);
+    if (!key || key === "::") continue;
+    byKey.set(key, row);
+  }
+  return [...byKey.values()];
+}
+
+function txExternalUniqueKey(row: TxRowPayload): string {
+  return `${String(row.user_id ?? "")}::${String(row.source_broker ?? "")}::${String(row.external_transaction_id ?? "")}`;
+}
+
+function isExternalIdUniqueConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  const code = String(e.code ?? "");
+  const message = String(e.message ?? "");
+  const details = String(e.details ?? "");
+  const haystack = `${message} ${details}`.toLowerCase();
+  return code === "23505" && haystack.includes("user_position_transactions_external_id_unique");
+}
+
 /** DB-Zeit (ISO) oder Legacy-Anzeige → einheitliches Anzeigeformat für die App. */
 function toAppDisplayDateTime(raw: string | undefined | null): string {
   if (!raw) return "";
@@ -690,7 +730,9 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
       note,
       legacy_trade_id: trade.id,
       legacy_leg: b.legacyLeg ?? "TAX_CORRECTION",
-      external_transaction_id: b.transactionId || trade.externalEventId || null
+      // Für Tx-Unique-Key nur echte Ereignis-ID der jeweiligen Buchung verwenden.
+      // Trade-weite Fallback-ID würde bei mehreren Legs (BUY/SELL) zu 23505 führen.
+      external_transaction_id: normalizeExternalTransactionId(b.transactionId)
     }));
   }
 
@@ -734,6 +776,11 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
     }
     const feesN = Number.isFinite(Number(b.feesAmount)) ? Number(b.feesAmount) : 0;
     const taxN = Number.isFinite(Number(b.taxAmount)) ? Number(b.taxAmount) : 0;
+    const normalizedGross = Math.max(0, grossN);
+    const normalizedFees = Math.max(0, feesN);
+    // DB-Constraint: SELL.tax_amount muss >= 0 sein.
+    // Legacy-Daten können hier noch negatives Vorzeichen enthalten.
+    const normalizedTax = kind === "SELL" ? Math.max(0, taxN) : taxN;
     return {
       user_id: userId,
       source_broker: trade.sourceBroker ?? "MANUAL",
@@ -743,14 +790,16 @@ function buildTxRowsForTrade(userId: string, trade: Trade, positionId: string): 
       booked_at: parseLegacyDateToIso(b.bookedAtIso || b.bookedAtDisplay, `tx.${kind} legacy=${trade.id}`),
       qty: kind === "TAX_CORRECTION" || kind === "INCOME" ? null : Number.isFinite(qtyN) ? qtyN : null,
       unit_price: kind === "TAX_CORRECTION" || kind === "INCOME" ? null : Number.isFinite(unitN) ? unitN : null,
-      gross_amount: grossN,
-      fees_amount: feesN,
-      tax_amount: taxN,
+      gross_amount: normalizedGross,
+      fees_amount: normalizedFees,
+      tax_amount: normalizedTax,
       tax_mode: "MANUAL",
       note,
       legacy_trade_id: trade.id,
       legacy_leg: b.legacyLeg ?? (kind === "BUY" ? "BUY" : kind === "SELL" ? "SELL" : "INCOME"),
-      external_transaction_id: b.transactionId || trade.externalEventId || null
+      // Für Tx-Unique-Key nur echte Ereignis-ID der jeweiligen Buchung verwenden.
+      // Trade-weite Fallback-ID würde bei mehreren Legs (BUY/SELL) zu 23505 führen.
+      external_transaction_id: normalizeExternalTransactionId(b.transactionId)
     };
   });
 }
@@ -841,7 +890,7 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
     posIdByLegacy.set(legacyTradeId, posId);
   }
 
-  const txRows: Array<Record<string, unknown>> = [];
+  const txRows: TxRowPayload[] = [];
   for (const trade of relevantTrades) {
     const positionId = posIdByLegacy.get(trade.id);
     if (!positionId) continue;
@@ -849,20 +898,84 @@ async function savePositionsDualWrite(userId: string, trades: Trade[]): Promise<
   }
 
   if (txRows.length === 0) return;
+  const dedupedTxRows = dedupeTxRowsByConflictKey(txRows);
+  if (dedupedTxRows.length === 0) return;
+  if (dedupedTxRows.length < txRows.length) {
+    console.warn(
+      `[cloudStorage] ${txRows.length - dedupedTxRows.length} doppelte Tx-Zeile(n) in Upsert-Payload entfernt (Konfliktkey user_id+legacy_trade_id+legacy_leg).`
+    );
+  }
+
+  // Vorab-Bereinigung für unique (user_id, source_broker, external_transaction_id):
+  // verhindert erwartbare 409-Fehler schon vor dem ersten Upsert.
+  const { data: existingExternalRows, error: existingExternalRowsError } = await supabase
+    .from("user_position_transactions")
+    .select("source_broker,external_transaction_id,legacy_trade_id,legacy_leg")
+    .eq("user_id", userId)
+    .not("external_transaction_id", "is", null);
+  if (existingExternalRowsError) throw existingExternalRowsError;
+
+  const ownerByExternalKey = new Map<string, string>();
+  for (const row of existingExternalRows ?? []) {
+    const externalId = String((row as Record<string, unknown>).external_transaction_id ?? "").trim();
+    if (!externalId) continue;
+    const key = `${userId}::${String((row as Record<string, unknown>).source_broker ?? "")}::${externalId}`;
+    const owner = `${String((row as Record<string, unknown>).legacy_trade_id ?? "")}::${String((row as Record<string, unknown>).legacy_leg ?? "")}`;
+    ownerByExternalKey.set(key, owner);
+  }
+
+  const seenPayloadExternal = new Map<string, string>();
+  const sanitizedTxRows = dedupedTxRows.map((row) => {
+    const externalId = String(row.external_transaction_id ?? "").trim();
+    if (!externalId) return row;
+    const externalKey = txExternalUniqueKey(row);
+    const rowOwner = `${String(row.legacy_trade_id ?? "")}::${String(row.legacy_leg ?? "")}`;
+    const existingOwner = ownerByExternalKey.get(externalKey);
+    const payloadOwner = seenPayloadExternal.get(externalKey);
+    const conflictsWithExisting = !!existingOwner && existingOwner !== rowOwner;
+    const conflictsInPayload = !!payloadOwner && payloadOwner !== rowOwner;
+    if (conflictsWithExisting || conflictsInPayload) {
+      return { ...row, external_transaction_id: null };
+    }
+    seenPayloadExternal.set(externalKey, rowOwner);
+    return row;
+  });
   // Sicherheitsänderung:
   // - keine "delete all then insert"-Strategie mehr (verhindert Totalverlust bei Insert-Fehlern)
   // - stattdessen idempotentes Upsert über legacy-Schlüssel
   const { error: upsertTxError } = await supabase
     .from("user_position_transactions")
-    .upsert(txRows, { onConflict: "user_id,legacy_trade_id,legacy_leg" });
-  if (upsertTxError) throw upsertTxError;
+    .upsert(sanitizedTxRows, { onConflict: "user_id,legacy_trade_id,legacy_leg" });
+  if (upsertTxError) {
+    // Fallback für Bestandsdaten:
+    // Wenn externe Event-IDs in mehreren Legs kollidieren, priorisieren wir funktionierende
+    // Cloud-Synchronisierung vor Persistenz der optionalen external_transaction_id.
+    if (isExternalIdUniqueConflict(upsertTxError)) {
+      const txRowsWithoutExternal = dedupedTxRows.map((row) => ({
+        ...row,
+        external_transaction_id: null
+      }));
+      const { error: retryError } = await supabase
+        .from("user_position_transactions")
+        .upsert(txRowsWithoutExternal, { onConflict: "user_id,legacy_trade_id,legacy_leg" });
+      if (!retryError) {
+        console.warn(
+          "[cloudStorage] external_transaction_id-Unique-Konflikt erkannt; Tx-Upsert erfolgreich mit external_transaction_id=null wiederholt."
+        );
+      } else {
+        throw retryError;
+      }
+    } else {
+      throw upsertTxError;
+    }
+  }
 
   // Optionale Bereinigung veralteter Legs pro Trade:
   // Löscht nur Legs von Trades im aktuellen Snapshot, die nicht mehr erzeugt wurden.
   const expectedLegPairs = new Set(
-    txRows.map((row) => `${String(row.legacy_trade_id ?? "")}::${String(row.legacy_leg ?? "")}`)
+    dedupedTxRows.map((row) => `${String(row.legacy_trade_id ?? "")}::${String(row.legacy_leg ?? "")}`)
   );
-  const legacyIds = [...new Set(txRows.map((row) => String(row.legacy_trade_id ?? "")).filter(Boolean))];
+  const legacyIds = [...new Set(dedupedTxRows.map((row) => String(row.legacy_trade_id ?? "")).filter(Boolean))];
   if (legacyIds.length > 0) {
     const { data: existingTxRows, error: existingTxError } = await supabase
       .from("user_position_transactions")

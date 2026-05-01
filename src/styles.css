@@ -242,8 +242,55 @@ body {
 
 .auth-topbar {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
   margin-bottom: 12px;
+}
+
+.sync-health-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.sync-health-badge.ok {
+  color: #89f1b5;
+  border-color: #1f5e3a;
+  background: rgba(41, 176, 98, 0.12);
+}
+
+.sync-health-badge.warn {
+  color: #ffd98a;
+  border-color: #6d5b2d;
+  background: rgba(180, 138, 34, 0.14);
+}
+
+.sync-health-badge.error {
+  color: #ff8d99;
+  border-color: #6e2630;
+  background: rgba(255, 93, 108, 0.08);
+}
+
+.sync-health-badge.neutral {
+  color: var(--muted);
+  border-color: var(--border);
+  background: rgba(125, 140, 168, 0.1);
+}
+
+.sync-health-inline-error {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid #6e2630;
+  border-radius: 8px;
+  color: #ff8d99;
+  background: rgba(255, 93, 108, 0.08);
+  font-size: 12px;
 }
 
 .header-inline-checkbox {

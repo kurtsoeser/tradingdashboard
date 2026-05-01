@@ -148,6 +148,31 @@ function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boo
 }
 
 export default function App() {
+  const formatCloudError = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === "object") {
+      const maybe = error as Record<string, unknown>;
+      const parts: string[] = [];
+      const message = typeof maybe.message === "string" ? maybe.message : "";
+      const details = typeof maybe.details === "string" ? maybe.details : "";
+      const hint = typeof maybe.hint === "string" ? maybe.hint : "";
+      const code = typeof maybe.code === "string" ? maybe.code : "";
+      const status =
+        typeof maybe.status === "number"
+          ? String(maybe.status)
+          : typeof maybe.statusCode === "number"
+          ? String(maybe.statusCode)
+          : "";
+      if (message) parts.push(message);
+      if (details) parts.push(details);
+      if (hint) parts.push(`hint: ${hint}`);
+      if (code) parts.push(`code: ${code}`);
+      if (status) parts.push(`status: ${status}`);
+      if (parts.length > 0) return parts.join(" | ");
+    }
+    return "Cloud save failed.";
+  };
+  type CloudSourceState = "cloud" | "local-fallback" | "new-cloud" | "unknown";
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const saved = window.localStorage.getItem("theme");
@@ -204,6 +229,10 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudHydrating, setCloudHydrating] = useState(false);
+  const [manualCloudSaveBusy, setManualCloudSaveBusy] = useState(false);
+  const [cloudSourceState, setCloudSourceState] = useState<CloudSourceState>("unknown");
+  const [lastCloudSaveAt, setLastCloudSaveAt] = useState<number | null>(null);
+  const [lastCloudSaveError, setLastCloudSaveError] = useState<string | null>(null);
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
@@ -348,6 +377,9 @@ export default function App() {
   useEffect(() => {
     if (!userId) {
       setCloudReady(false);
+      setCloudSourceState("unknown");
+      setLastCloudSaveAt(null);
+      setLastCloudSaveError(null);
       return;
     }
     let cancelled = false;
@@ -360,8 +392,9 @@ export default function App() {
           const remoteTradeArr = Array.isArray(remote.trades) ? remote.trades : [];
           const normalizedFromRemote = normalizeTradesOnLoad(remoteTradeArr).trades;
           const localBackup = loadTradesFromStorage();
+          const usingLocalFallback = normalizedFromRemote.length === 0 && localBackup.length > 0;
           const normalizedTrades =
-            normalizedFromRemote.length === 0 && localBackup.length > 0
+            usingLocalFallback
               ? normalizeTradesOnLoad(localBackup).trades
               : normalizedFromRemote;
           const legacyCheckedIds = new Set<string>(
@@ -376,6 +409,7 @@ export default function App() {
               "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
             );
           }
+          setCloudSourceState(usingLocalFallback ? "local-fallback" : "cloud");
           setTrades(hydratedTrades);
           saveTradesToStorage(hydratedTrades);
           setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
@@ -388,10 +422,13 @@ export default function App() {
           if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
         } else {
           await saveCloudSnapshot(userId, buildSnapshot());
+          setCloudSourceState("new-cloud");
+          setLastCloudSaveAt(Date.now());
         }
         setCloudReady(true);
       } catch (error) {
         console.error("Cloud sync init failed:", error);
+        setLastCloudSaveError(error instanceof Error ? error.message : "Cloud sync init failed.");
       } finally {
         if (!cancelled) setCloudHydrating(false);
       }
@@ -404,12 +441,92 @@ export default function App() {
   useEffect(() => {
     if (!userId || !cloudReady || cloudHydrating) return;
     const id = window.setTimeout(() => {
-      void saveCloudSnapshot(userId, buildSnapshot()).catch((error) => {
-        console.error("Cloud save failed:", error);
-      });
+      void saveCloudSnapshot(userId, buildSnapshot())
+        .then(() => {
+          setLastCloudSaveAt(Date.now());
+          setLastCloudSaveError(null);
+        })
+        .catch((error) => {
+          console.error("Cloud save failed:", error);
+          setLastCloudSaveError(formatCloudError(error));
+        });
     }, 800);
     return () => window.clearTimeout(id);
   }, [userId, cloudReady, cloudHydrating, trades, assetMeta, journalData, aiKnowledgeBase, appSettings, theme]);
+
+  const triggerManualCloudSave = async () => {
+    if (!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy) return;
+    setManualCloudSaveBusy(true);
+    try {
+      await saveCloudSnapshot(userId, buildSnapshot());
+      setLastCloudSaveAt(Date.now());
+      setLastCloudSaveError(null);
+    } catch (error) {
+      console.error("Manual cloud save failed:", error);
+      const message = formatCloudError(error);
+      setLastCloudSaveError(message);
+      window.alert(
+        appSettings.language === "en"
+          ? `Manual cloud sync failed:\n\n${message}`
+          : `Manuelle Cloud-Synchronisierung fehlgeschlagen:\n\n${message}`
+      );
+    } finally {
+      setManualCloudSaveBusy(false);
+    }
+  };
+
+  const syncTimeLabel = useMemo(() => {
+    if (!lastCloudSaveAt) return appSettings.language === "en" ? "never" : "nie";
+    return new Date(lastCloudSaveAt).toLocaleTimeString(getLanguageLocale(appSettings.language), {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }, [lastCloudSaveAt, appSettings.language]);
+  const syncBadge = useMemo(() => {
+    if (cloudHydrating) {
+      return {
+        tone: "neutral" as const,
+        label: appSettings.language === "en" ? "Sync: loading..." : "Sync: lädt...",
+        detail: appSettings.language === "en" ? "Cloud snapshot is being loaded." : "Cloud-Snapshot wird geladen."
+      };
+    }
+    if (lastCloudSaveError) {
+      return {
+        tone: "error" as const,
+        label: appSettings.language === "en" ? "Sync: error" : "Sync: Fehler",
+        detail: lastCloudSaveError
+      };
+    }
+    if (cloudSourceState === "local-fallback") {
+      return {
+        tone: "warn" as const,
+        label: appSettings.language === "en" ? "Sync: local fallback" : "Sync: lokaler Fallback",
+        detail:
+          appSettings.language === "en"
+            ? `Cloud looked empty; local browser data is used. Last save: ${syncTimeLabel}.`
+            : `Cloud wirkte leer; lokale Browser-Daten aktiv. Letzter Save: ${syncTimeLabel}.`
+      };
+    }
+    if (cloudSourceState === "new-cloud") {
+      return {
+        tone: "ok" as const,
+        label: appSettings.language === "en" ? "Sync: cloud initialized" : "Sync: Cloud initialisiert",
+        detail:
+          appSettings.language === "en"
+            ? `Cloud was initialized from current app data. Last save: ${syncTimeLabel}.`
+            : `Cloud wurde aus den aktuellen App-Daten initialisiert. Letzter Save: ${syncTimeLabel}.`
+      };
+    }
+    return {
+      tone: "ok" as const,
+      label: appSettings.language === "en" ? "Sync: cloud ok" : "Sync: Cloud OK",
+      detail:
+        appSettings.language === "en"
+          ? `Using cloud data. Last save: ${syncTimeLabel}.`
+          : `Cloud-Daten aktiv. Letzter Save: ${syncTimeLabel}.`
+    };
+  }, [cloudHydrating, lastCloudSaveError, cloudSourceState, appSettings.language, syncTimeLabel]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -1822,8 +1939,26 @@ export default function App() {
       />
       <main className="content">
         <div className="auth-topbar">
+          <span className={`sync-health-badge ${syncBadge.tone}`} title={syncBadge.detail}>
+            {syncBadge.label}
+          </span>
+          <button
+            className="secondary slim"
+            onClick={() => void triggerManualCloudSave()}
+            disabled={!userId || !cloudReady || cloudHydrating || manualCloudSaveBusy}
+            title={appSettings.language === "en" ? "Manually trigger cloud save" : "Speichern nach Supabase manuell auslösen"}
+          >
+            {manualCloudSaveBusy
+              ? appSettings.language === "en"
+                ? "Syncing..."
+                : "Synchronisiere..."
+              : appSettings.language === "en"
+              ? "Sync now"
+              : "Jetzt synchronisieren"}
+          </button>
           <button className="secondary slim" onClick={handleLogout}>Logout</button>
         </div>
+        {lastCloudSaveError ? <p className="sync-health-inline-error">{lastCloudSaveError}</p> : null}
         {view === "dashboard" && (
           <DashboardView
             kpis={kpis}
