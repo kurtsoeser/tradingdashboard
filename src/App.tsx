@@ -2184,6 +2184,11 @@ export default function App() {
               if (!editingTradeId) return;
               setTradeManualChecked(editingTradeId, checked);
             }}
+            onDeleteEditingTrade={() => {
+              if (!editingTradeId) return;
+              deleteTrade(editingTradeId);
+              setView("trades");
+            }}
             onSetViewTrades={() => setView("trades")}
             onCancelNewTradeView={cancelNewTradeView}
             bookingDraft={bookingDraft}

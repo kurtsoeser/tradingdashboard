@@ -69,6 +69,7 @@ interface NewTradeViewProps {
   canSaveTrade: boolean;
   onSaveNewTrade: () => void;
   onSetEditingTradeManualChecked: (checked: boolean) => void;
+  onDeleteEditingTrade: () => void;
   onSetViewTrades: () => void;
   onCancelNewTradeView: () => void;
   bookingDraft: TradePositionBooking[];
@@ -95,6 +96,7 @@ export function NewTradeView({
   canSaveTrade,
   onSaveNewTrade,
   onSetEditingTradeManualChecked,
+  onDeleteEditingTrade,
   onSetViewTrades,
   onCancelNewTradeView,
   bookingDraft,
@@ -616,6 +618,11 @@ export function NewTradeView({
                 />
                 <span>{t(language, "manualChecked")}</span>
               </label>
+            ) : null}
+            {editingTradeId ? (
+              <button className="secondary danger-mobile" type="button" onClick={onDeleteEditingTrade}>
+                {t(language, "delete")}
+              </button>
             ) : null}
             {!isMobile ? (
               <button className="primary" type="button" onClick={onSaveNewTrade} disabled={!canSaveTrade}>

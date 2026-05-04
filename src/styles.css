@@ -2006,6 +2006,15 @@ button.dashboard-link-card:hover {
   gap: 6px;
 }
 
+.trades-status-switch--icon-only {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.trades-status-switch--icon-only .trades-status-switch-content {
+  gap: 0;
+}
+
 .trades-status-switch:hover {
   border-color: #5e5e66;
 }

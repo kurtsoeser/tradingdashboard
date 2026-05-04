@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, Copy, ExternalLink, FileDown, FileSpreadsheet, Filter, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, X, Briefcase } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDollarSign, Copy, ExternalLink, FileDown, FileSpreadsheet, Filter, HandCoins, Layers, Plus, Search, TrendingDown, TrendingUp, Upload, Briefcase } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../app/i18n";
 import { formatDateTimeAT } from "../../app/date";
@@ -82,7 +82,6 @@ export function TradesView(props: TradesViewProps) {
   const [mobileShowAllKpis, setMobileShowAllKpis] = useState(false);
   const [draftSearch, setDraftSearch] = useState(props.search);
   const [draftStatusFilter, setDraftStatusFilter] = useState(props.statusFilter);
-  const [draftCheckedFilter, setDraftCheckedFilter] = useState(props.checkedFilter);
   const [draftSourceFilter, setDraftSourceFilter] = useState(props.sourceFilter);
   const [draftTypFilter, setDraftTypFilter] = useState<string[]>(props.typFilter);
   const [draftBasiswertFilter, setDraftBasiswertFilter] = useState<string[]>(props.basiswertFilter);
@@ -92,7 +91,6 @@ export function TradesView(props: TradesViewProps) {
     let count = 0;
     if (props.search.trim()) count += 1;
     if (props.statusFilter !== "Alle") count += 1;
-    if (props.checkedFilter !== "Alle") count += 1;
     if (props.sourceFilter !== "Alle") count += 1;
     if (props.typFilter.length > 0) count += 1;
     if (props.basiswertFilter.length > 0) count += 1;
@@ -101,7 +99,6 @@ export function TradesView(props: TradesViewProps) {
   }, [
     props.search,
     props.statusFilter,
-    props.checkedFilter,
     props.sourceFilter,
     props.typFilter.length,
     props.basiswertFilter.length,
@@ -122,12 +119,15 @@ export function TradesView(props: TradesViewProps) {
     if (!mobileFilterOpen) return;
     setDraftSearch(props.search);
     setDraftStatusFilter(props.statusFilter);
-    setDraftCheckedFilter(props.checkedFilter);
     setDraftSourceFilter(props.sourceFilter);
     setDraftTypFilter(props.typFilter);
     setDraftBasiswertFilter(props.basiswertFilter);
     setDraftRangeFilter(props.rangeFilter);
-  }, [mobileFilterOpen, props.search, props.statusFilter, props.checkedFilter, props.sourceFilter, props.typFilter, props.basiswertFilter, props.rangeFilter]);
+  }, [mobileFilterOpen, props.search, props.statusFilter, props.sourceFilter, props.typFilter, props.basiswertFilter, props.rangeFilter]);
+
+  useEffect(() => {
+    if (props.checkedFilter !== "Alle") props.onCheckedFilterChange("Alle");
+  }, [props.checkedFilter, props.onCheckedFilterChange]);
 
   const columnPrefsKey = TRADES_COLUMN_PREFS_STORAGE_KEY;
   const statusBaseOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
@@ -174,8 +174,7 @@ export function TradesView(props: TradesViewProps) {
     | "verkaufPreis"
     | "tradeTaxes"
     | "gewinn"
-    | "rendite"
-    | "action";
+    | "rendite";
 
   const defaultVisible: Record<ColumnId, boolean> = {
     status: true,
@@ -195,8 +194,7 @@ export function TradesView(props: TradesViewProps) {
     verkaufPreis: true,
     tradeTaxes: true,
     gewinn: true,
-    rendite: true,
-    action: true
+    rendite: true
   };
 
   const defaultOrder: ColumnId[] = [
@@ -217,8 +215,7 @@ export function TradesView(props: TradesViewProps) {
     "verkaufPreis",
     "tradeTaxes",
     "gewinn",
-    "rendite",
-    "action"
+    "rendite"
   ];
 
   const initialPrefs = useMemo(() => {
@@ -254,7 +251,7 @@ export function TradesView(props: TradesViewProps) {
     }
   }, [columnOrder, visibleById]);
 
-  const alwaysVisible = useMemo(() => new Set<ColumnId>(["status", "action"]), []);
+  const alwaysVisible = useMemo(() => new Set<ColumnId>(["status"]), []);
   const sourceLabel = (source?: Trade["sourceBroker"]) => {
     if (!source) return "MANUAL";
     if (source === "TRADE_REPUBLIC") return "Trade Republic";
@@ -407,26 +404,6 @@ export function TradesView(props: TradesViewProps) {
           }
           return "-";
         }
-      },
-      action: {
-        id: "action" satisfies ColumnId,
-        label: t(props.language, "action"),
-        draggable: false,
-        render: (trade: Trade) => (
-          <div className="table-actions">
-            <button
-              type="button"
-              className="icon-btn action delete"
-              title={t(props.language, "delete")}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onDeleteTrade(trade.id);
-              }}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        )
       }
     };
     return defs as Record<ColumnId, { id: ColumnId; label: string; sortable?: TradesSortField; draggable: boolean; render: (trade: Trade) => JSX.Element | string | null }>;
@@ -492,7 +469,7 @@ export function TradesView(props: TradesViewProps) {
   };
 
   const copyVisibleTradesToClipboard = async () => {
-    const copyColumns = renderedColumns.filter((id) => id !== "action");
+    const copyColumns = renderedColumns;
     const rows = props.filteredTrades.slice(0, 500);
     const toMdCell = (value: string) => value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
     const headerLine = `| ${copyColumns.map((id) => toMdCell(getColumnHeader(id))).join(" | ")} |`;
@@ -511,7 +488,7 @@ export function TradesView(props: TradesViewProps) {
   const applyMobileFilters = () => {
     props.onSearchChange(draftSearch);
     props.onStatusFilterChange(draftStatusFilter);
-    props.onCheckedFilterChange(draftCheckedFilter);
+    props.onCheckedFilterChange("Alle");
     props.onSourceFilterChange(draftSourceFilter);
     props.onTypFilterChange(draftTypFilter);
     props.onBasiswertFilterChange(draftBasiswertFilter);
@@ -522,7 +499,6 @@ export function TradesView(props: TradesViewProps) {
   const resetMobileFilters = () => {
     setDraftSearch("");
     setDraftStatusFilter("Alle");
-    setDraftCheckedFilter("Alle");
     setDraftSourceFilter("Alle");
     setDraftTypFilter([]);
     setDraftBasiswertFilter([]);
@@ -829,12 +805,13 @@ export function TradesView(props: TradesViewProps) {
                     <button
                       key={option.value}
                       type="button"
-                      className={`trades-status-switch ${props.statusFilter === option.value ? "is-active" : ""}`}
+                      className={`trades-status-switch trades-status-switch--icon-only ${props.statusFilter === option.value ? "is-active" : ""}`}
+                      aria-label={option.label}
+                      title={option.label}
                       onClick={() => props.onStatusFilterChange(option.value)}
                     >
                       <span className="trades-status-switch-content">
                         {option.icon}
-                        {option.label}
                       </span>
                     </button>
                   ))}
@@ -863,17 +840,6 @@ export function TradesView(props: TradesViewProps) {
                       {sourceLabel(source)}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label>
-                {t(props.language, "manualChecked")}
-                <select
-                  value={props.checkedFilter}
-                  onChange={(event) => props.onCheckedFilterChange(event.target.value as "Alle" | "Gecheckt" | "Offen")}
-                >
-                  <option value="Alle">{t(props.language, "all")}</option>
-                  <option value="Gecheckt">{t(props.language, "manualCheckedDone")}</option>
-                  <option value="Offen">{t(props.language, "manualCheckedTodo")}</option>
                 </select>
               </label>
               <label>
@@ -1142,12 +1108,13 @@ export function TradesView(props: TradesViewProps) {
                     <button
                       key={`mobile-${option.value}`}
                       type="button"
-                      className={`trades-status-switch ${draftStatusFilter === option.value ? "is-active" : ""}`}
+                      className={`trades-status-switch trades-status-switch--icon-only ${draftStatusFilter === option.value ? "is-active" : ""}`}
+                      aria-label={option.label}
+                      title={option.label}
                       onClick={() => setDraftStatusFilter(option.value)}
                     >
                       <span className="trades-status-switch-content">
                         {option.icon}
-                        {option.label}
                       </span>
                     </button>
                   ))}
@@ -1174,14 +1141,6 @@ export function TradesView(props: TradesViewProps) {
                       {sourceLabel(source)}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label>
-                Gecheckt
-                <select value={draftCheckedFilter} onChange={(event) => setDraftCheckedFilter(event.target.value as "Alle" | "Gecheckt" | "Offen")}>
-                  <option value="Alle">{t(props.language, "all")}</option>
-                  <option value="Gecheckt">{t(props.language, "manualCheckedDone")}</option>
-                  <option value="Offen">{t(props.language, "manualCheckedTodo")}</option>
                 </select>
               </label>
               <div className="trades-filter-group">
