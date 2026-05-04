@@ -130,11 +130,32 @@ export function TradesView(props: TradesViewProps) {
   }, [mobileFilterOpen, props.search, props.statusFilter, props.checkedFilter, props.sourceFilter, props.typFilter, props.basiswertFilter, props.rangeFilter]);
 
   const columnPrefsKey = TRADES_COLUMN_PREFS_STORAGE_KEY;
-  const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
+  const statusBaseOptions: Array<{ value: "Alle" | Trade["status"]; label: string }> = [
     { value: "Alle", label: t(props.language, "all") },
     { value: "Offen", label: t(props.language, "open") },
     { value: "Geschlossen", label: t(props.language, "closed") }
   ];
+  const statusOptions: Array<{ value: "Alle" | Trade["status"]; label: string; icon: JSX.Element }> = statusBaseOptions.map((option) => ({
+    ...option,
+    icon:
+      option.value === "Offen" ? (
+        <Circle size={13} />
+      ) : option.value === "Geschlossen" ? (
+        <CheckCircle2 size={13} />
+      ) : (
+        <Layers size={13} />
+      )
+  }));
+
+  const singleSelectToArray = (value: string): string[] => {
+    if (value === "Alle") return [];
+    return [value];
+  };
+
+  const arrayToSingleSelect = (values: string[]): string => {
+    if (!values.length) return "Alle";
+    return values[0];
+  };
   type ColumnId =
     | "status"
     | "manualChecked"
@@ -607,7 +628,7 @@ export function TradesView(props: TradesViewProps) {
   };
 
   return (
-    <section className={`section trades-page${isMobile ? " trades-page--mobile-sticky-bar" : ""}`}>
+    <section className={`section trades-page overview-page${isMobile ? " trades-page--mobile-sticky-bar" : ""}`}>
       <PageHeader
         className={isMobile ? "page-header--mobile-one-hand" : undefined}
         title={
@@ -699,7 +720,7 @@ export function TradesView(props: TradesViewProps) {
         }
       />
 
-      <section className="kpis trades-kpis">
+      <section className="kpis trades-kpis overview-kpis">
         {visibleKpiIds.includes("total") ? <div className="card">
           <h3>
             <Briefcase size={14} />
@@ -773,38 +794,7 @@ export function TradesView(props: TradesViewProps) {
             {mobileShowAllKpis ? "Weniger Kennzahlen" : "Mehr Kennzahlen"}
           </button>
         </div>
-      ) : (
-        <div className="trades-summary-grid trades-summary-grid-spaced">
-          <div className="card">
-            <h3>
-              <CircleDollarSign size={14} />
-              {t(props.language, "sigmaBuy")}
-            </h3>
-            <div className="value">{money(props.tradesSummary.totalKauf)}</div>
-          </div>
-          <div className="card">
-            <h3>
-              <CircleDollarSign size={14} />
-              {t(props.language, "sigmaSell")}
-            </h3>
-            <div className="value">{money(props.tradesSummary.totalVerkauf)}</div>
-          </div>
-          <div className="card">
-            <h3>
-              <HandCoins size={14} />
-              {t(props.language, "openCapital")}
-            </h3>
-            <div className="value">{money(props.kpis.openCapital)}</div>
-          </div>
-          <div className="card">
-            <h3>
-              <TrendingUp size={14} />
-              {t(props.language, "realizedPL")}
-            </h3>
-            <div className={`value ${props.kpis.totalPL >= 0 ? "positive" : "negative"}`}>{money(props.kpis.totalPL)}</div>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <div className="trades-controls-layout">
         <div className="trades-controls-main">
@@ -816,7 +806,7 @@ export function TradesView(props: TradesViewProps) {
               <p>{t(props.language, "importGuideP3")}</p>
             </div>
           ) : null}
-          <div className="card trades-filters-card trades-filters-search-card">
+          <div className="card trades-filters-card overview-filters-card trades-filters-search-card">
             <label className="trades-single-search">
               <span className="label-with-icon">
                 <Search size={13} />
@@ -825,7 +815,7 @@ export function TradesView(props: TradesViewProps) {
               <input value={props.search} onChange={(event) => props.onSearchChange(event.target.value)} placeholder={t(props.language, "searchPlaceholder")} />
             </label>
           </div>
-          {!isMobile ? <div className="card trades-filters-card trades-filters-card-main">
+          {!isMobile ? <div className="card trades-filters-card overview-filters-card trades-filters-card-main overview-filters-card-main">
             <div className="trades-filters-top-actions">
               <button type="button" className="secondary slim" onClick={props.onResetFilters}>
                 {t(props.language, "reset")}
@@ -842,14 +832,18 @@ export function TradesView(props: TradesViewProps) {
                       className={`trades-status-switch ${props.statusFilter === option.value ? "is-active" : ""}`}
                       onClick={() => props.onStatusFilterChange(option.value)}
                     >
-                      {option.label}
+                      <span className="trades-status-switch-content">
+                        {option.icon}
+                        {option.label}
+                      </span>
                     </button>
                   ))}
                 </div>
               </label>
               <label>
                 {t(props.language, "type")}
-                <select multiple size={6} value={props.typFilter} onChange={(event) => props.onTypFilterChange(Array.from(event.target.selectedOptions, (option) => option.value))}>
+                <select value={arrayToSingleSelect(props.typFilter)} onChange={(event) => props.onTypFilterChange(singleSelectToArray(event.target.value))}>
+                  <option value="Alle">{t(props.language, "all")}</option>
                   {props.availableTypes.map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -885,11 +879,10 @@ export function TradesView(props: TradesViewProps) {
               <label>
                 {t(props.language, "basiswert")}
                 <select
-                  multiple
-                  size={6}
-                  value={props.basiswertFilter}
-                  onChange={(event) => props.onBasiswertFilterChange(Array.from(event.target.selectedOptions, (option) => option.value))}
+                  value={arrayToSingleSelect(props.basiswertFilter)}
+                  onChange={(event) => props.onBasiswertFilterChange(singleSelectToArray(event.target.value))}
                 >
+                  <option value="Alle">{t(props.language, "all")}</option>
                   {props.availableBasiswerte.map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -1152,7 +1145,10 @@ export function TradesView(props: TradesViewProps) {
                       className={`trades-status-switch ${draftStatusFilter === option.value ? "is-active" : ""}`}
                       onClick={() => setDraftStatusFilter(option.value)}
                     >
-                      {option.label}
+                      <span className="trades-status-switch-content">
+                        {option.icon}
+                        {option.label}
+                      </span>
                     </button>
                   ))}
                 </div>

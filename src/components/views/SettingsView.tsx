@@ -30,6 +30,7 @@ interface SettingsViewProps {
   /** JSON-App-Backup (vollständig): Import wie unter Trades. */
   onImportBackupFile: (file: File) => Promise<void>;
   onExportJsonBackup: () => void;
+  onOpenImportPage: () => void;
 }
 
 export function SettingsView({
@@ -46,7 +47,8 @@ export function SettingsView({
   onApplyReconcileSuggestion,
   onApplyAllReconcileSuggestions,
   onImportBackupFile,
-  onExportJsonBackup
+  onExportJsonBackup,
+  onOpenImportPage
 }: SettingsViewProps) {
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     onSettingsChange({ ...settings, [key]: value });
@@ -64,6 +66,10 @@ export function SettingsView({
         subtitle="Passe App-Verhalten, Anzeige und Marktpräferenzen an"
         actions={
           <>
+            <button type="button" className="secondary" onClick={onOpenImportPage} title={t("navImport")}>
+              <Upload size={14} />
+              {t("navImport")}
+            </button>
             <input
               id="settings-header-backup-import"
               type="file"

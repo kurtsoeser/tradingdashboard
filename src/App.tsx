@@ -2274,6 +2274,7 @@ export default function App() {
             reconcileRows={reconcileRows}
             onApplyReconcileSuggestion={applySingleReconcileSuggestion}
             onApplyAllReconcileSuggestions={applyAllReconcileSuggestions}
+            onOpenImportPage={() => setView("import")}
           />
         )}
       </main>

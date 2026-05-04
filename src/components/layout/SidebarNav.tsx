@@ -1,4 +1,5 @@
-import { BarChart3, BookMarked, CandlestickChart, ClipboardList, Database, LayoutDashboard, Moon, Route, Search, Settings2, Sparkles, Sun, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BarChart3, BookMarked, CandlestickChart, ChevronDown, ClipboardList, Database, LayoutDashboard, Moon, Search, Settings2, Sparkles, Sun } from "lucide-react";
 import { t } from "../../app/i18n";
 import type { View } from "../../app/types";
 import type { AppSettings } from "../../app/settings";
@@ -24,10 +25,16 @@ export function SidebarNav({
   onToggleMobileMenu,
   onCloseMobileMenu
 }: SidebarNavProps) {
+  const [tradesMenuOpen, setTradesMenuOpen] = useState(true);
   const handleViewChange = (nextView: View) => {
     onViewChange(nextView);
     onCloseMobileMenu();
   };
+  useEffect(() => {
+    if (view === "trades" || view === "bookings" || view === "assets") {
+      setTradesMenuOpen(true);
+    }
+  }, [view]);
 
   return (
     <>
@@ -48,22 +55,43 @@ export function SidebarNav({
             <LayoutDashboard size={15} />
             {t(language, "navDashboard")}
           </button>
-          <button className={view === "trades" ? "active" : ""} onClick={() => handleViewChange("trades")}>
-            <CandlestickChart size={15} />
-            {t(language, "navTrades")}
-          </button>
-          <button className={view === "import" ? "active" : ""} onClick={() => handleViewChange("import")}>
-            <Upload size={15} />
-            {t(language, "navImport")}
-          </button>
-          <button className={view === "bookings" ? "active" : ""} onClick={() => handleViewChange("bookings")}>
-            <ClipboardList size={15} />
-            {t(language, "navBookings")}
-          </button>
-          <button className={view === "assets" ? "active" : ""} onClick={() => handleViewChange("assets")}>
-            <Database size={15} />
-            {t(language, "navAssets")}
-          </button>
+          <div className={`sidebar-ai-submenu ${view === "trades" || view === "bookings" || view === "assets" ? "is-ai-section" : ""}`}>
+            <div className="sidebar-collapsible-head">
+              <button className={view === "trades" ? "active" : ""} onClick={() => handleViewChange("trades")}>
+                <CandlestickChart size={15} />
+                {t(language, "navTrades")}
+              </button>
+              <button
+                type="button"
+                className="sidebar-collapsible-toggle"
+                aria-expanded={tradesMenuOpen}
+                aria-label={tradesMenuOpen ? "Trades-Unterpunkte einklappen" : "Trades-Unterpunkte ausklappen"}
+                onClick={() => setTradesMenuOpen((prev) => !prev)}
+              >
+                <ChevronDown size={14} className={tradesMenuOpen ? "is-open" : ""} />
+              </button>
+            </div>
+            {tradesMenuOpen ? (
+              <>
+                <button
+                  type="button"
+                  className={`ai-submenu-btn ${view === "bookings" ? "active" : ""}`}
+                  onClick={() => handleViewChange("bookings")}
+                >
+                  <ClipboardList size={14} aria-hidden />
+                  {t(language, "navBookings")}
+                </button>
+                <button
+                  type="button"
+                  className={`ai-submenu-btn ${view === "assets" ? "active" : ""}`}
+                  onClick={() => handleViewChange("assets")}
+                >
+                  <Database size={14} aria-hidden />
+                  {t(language, "navAssets")}
+                </button>
+              </>
+            ) : null}
+          </div>
           <button className={view === "analytics" ? "active" : ""} onClick={() => handleViewChange("analytics")}>
             <BarChart3 size={15} />
             {t(language, "navAnalytics")}
@@ -76,14 +104,6 @@ export function SidebarNav({
             <button className={view === "aiAssistant" ? "active" : ""} onClick={() => handleViewChange("aiAssistant")}>
               <Sparkles size={15} />
               {t(language, "navAiAssistant")}
-            </button>
-            <button
-              type="button"
-              className={`ai-submenu-btn ${view === "aiAssistantPlan" ? "active" : ""}`}
-              onClick={() => handleViewChange("aiAssistantPlan")}
-            >
-              <Route size={14} aria-hidden />
-              {t(language, "navAiRoadmap")}
             </button>
           </div>
           <button className={view === "isinLive" ? "active" : ""} onClick={() => handleViewChange("isinLive")}>
@@ -111,14 +131,6 @@ export function SidebarNav({
         <button className={view === "trades" ? "active" : ""} onClick={() => handleViewChange("trades")} aria-label={t(language, "navTrades")}>
           <CandlestickChart size={16} />
           <span>{t(language, "navTrades")}</span>
-        </button>
-        <button className={view === "import" ? "active" : ""} onClick={() => handleViewChange("import")} aria-label={t(language, "navImport")}>
-          <Upload size={16} />
-          <span>{t(language, "navImport")}</span>
-        </button>
-        <button className={view === "bookings" ? "active" : ""} onClick={() => handleViewChange("bookings")} aria-label={t(language, "navBookings")}>
-          <ClipboardList size={16} />
-          <span>{t(language, "navBookings")}</span>
         </button>
         <button className={view === "assets" ? "active" : ""} onClick={() => handleViewChange("assets")} aria-label={t(language, "navAssets")}>
           <Database size={16} />

@@ -474,7 +474,7 @@ export function BookingsView({
   };
 
   return (
-    <section className="section trades-page">
+    <section className="section trades-page overview-page bookings-page">
       <PageHeader
         title={
           <>
@@ -557,7 +557,7 @@ export function BookingsView({
         }
       />
 
-      <section className="kpis trades-kpis">
+      <section className="kpis trades-kpis overview-kpis">
         {importNotice ? (
           <div
             className="card"
@@ -608,7 +608,7 @@ export function BookingsView({
         </div>
       </section>
 
-      <div className="trades-summary-grid trades-summary-grid-spaced">
+      <div className="trades-summary-grid overview-summary-grid trades-summary-grid-spaced">
         <div className="card">
           <h3>
             <CircleDollarSign size={14} />
@@ -670,7 +670,7 @@ export function BookingsView({
               <p>{t(language, "importGuideP3")}</p>
             </div>
           ) : null}
-          <div className="card trades-filters-card trades-filters-search-card">
+          <div className="card trades-filters-card overview-filters-card trades-filters-search-card">
             <label className="trades-single-search">
               <span className="label-with-icon">
                 <Search size={13} />
@@ -685,7 +685,7 @@ export function BookingsView({
               />
             </label>
           </div>
-          <div className="card trades-filters-card trades-filters-card-main">
+          <div className="card trades-filters-card overview-filters-card trades-filters-card-main overview-filters-card-main">
             <div className="trades-filters-top-actions">
               <button type="button" className="secondary slim" onClick={resetFilters}>
                 {t(language, "reset")}
