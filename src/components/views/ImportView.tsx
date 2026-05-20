@@ -6,7 +6,7 @@ import { PageHeader } from "../PageHeader";
 import { t } from "../../app/i18n";
 import type { AppSettings } from "../../app/settings";
 import type { Trade } from "../../types/trade";
-import { supabase } from "../../lib/supabaseClient";
+import { upsertBrokerEventsToStorage, type StoredBrokerEvent } from "../../lib/brokerEventsStorage";
 import { buildFlatBookingRows, type FlatBookingRow } from "../../lib/flattenBookings";
 
 type CsvRow = Record<string, string>;
@@ -34,7 +34,6 @@ interface ImportViewProps {
   language: AppSettings["language"];
   existingTradesCount: number;
   existingTrades: Trade[];
-  userId: string | null;
   onCommitImportedTrades: (nextTrades: Trade[]) => void;
 }
 
@@ -236,7 +235,7 @@ function mapCsvToExpectedAmount(row: CsvRow): number | null {
   return amount + fee + tax;
 }
 
-export function ImportView({ language, existingTradesCount, existingTrades, userId, onCommitImportedTrades }: ImportViewProps) {
+export function ImportView({ language, existingTradesCount, existingTrades, onCommitImportedTrades }: ImportViewProps) {
   const [step, setStep] = useState(1);
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -752,10 +751,6 @@ export function ImportView({ language, existingTradesCount, existingTrades, user
   };
 
   const runExecutionPreview = async () => {
-    if (!userId || !supabase) {
-      setError(t(language, "importExecuteMissingAuth"));
-      return;
-    }
     if (unresolvedReviewRows.length > 0) {
       setError(
         t(language, "importExecuteBlockedByReview", {
@@ -767,10 +762,9 @@ export function ImportView({ language, existingTradesCount, existingTrades, user
     setExecuting(true);
     setError(null);
     try {
-      const eventRows = mappedRows
+      const eventRows: StoredBrokerEvent[] = mappedRows
         .filter((row) => (row.transaction_id ?? "").trim() !== "")
         .map((row) => ({
-          user_id: userId,
           source_broker: "TRADE_REPUBLIC",
           source_account: (row.account_type ?? "").trim() || null,
           external_event_id: (row.transaction_id ?? "").trim(),
@@ -795,10 +789,7 @@ export function ImportView({ language, existingTradesCount, existingTrades, user
         }));
 
       if (eventRows.length > 0) {
-        const { error: upsertError } = await supabase
-          .from("user_broker_events")
-          .upsert(eventRows, { onConflict: "user_id,source_broker,external_event_id" });
-        if (upsertError) throw upsertError;
+        upsertBrokerEventsToStorage(eventRows);
       }
 
       const planByTx = new Map(executionPlan.map((item) => [item.transactionId, item]));

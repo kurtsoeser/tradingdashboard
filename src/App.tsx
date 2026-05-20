@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import type { Trade, TradePositionBooking } from "./types/trade";
 import { getKpis, getTradeRealizedPL, isTradeClosed } from "./lib/analytics";
@@ -40,7 +40,6 @@ import { loadAiKnowledgeFromStorage, saveAiKnowledgeToStorage } from "./lib/aiKn
 import { loadJournalFromStorage, saveJournalToStorage, type JournalData } from "./lib/journalStorage";
 import { toIsoWeekKey, toLocalYmd } from "./lib/journalIsoWeek";
 import { buildReconcileRows } from "./lib/isinWknReconcile";
-import { fetchCloudDataRevision, loadCloudSnapshot, saveCloudSnapshot, type CloudSnapshot } from "./lib/cloudStorage";
 import {
   assignLegacyLegs,
   cloneBookings,
@@ -51,8 +50,6 @@ import {
 } from "./lib/bookingsDraft";
 import { buildFlatBookingRows } from "./lib/flattenBookings";
 import { formatDecimalForForm, parseLocaleDecimal } from "./lib/numberLocale";
-import { supabase, supabaseConfigured } from "./lib/supabaseClient";
-
 function mergeAiMarkdownIntoJournal(existing: string, heading: string, block: string): string {
   const c = existing.trimEnd();
   const b = block.trim();
@@ -148,31 +145,6 @@ function normalizeTradesOnLoad(trades: Trade[]): { trades: Trade[]; changed: boo
 }
 
 export default function App() {
-  const formatCloudError = (error: unknown): string => {
-    if (error instanceof Error) return error.message;
-    if (error && typeof error === "object") {
-      const maybe = error as Record<string, unknown>;
-      const parts: string[] = [];
-      const message = typeof maybe.message === "string" ? maybe.message : "";
-      const details = typeof maybe.details === "string" ? maybe.details : "";
-      const hint = typeof maybe.hint === "string" ? maybe.hint : "";
-      const code = typeof maybe.code === "string" ? maybe.code : "";
-      const status =
-        typeof maybe.status === "number"
-          ? String(maybe.status)
-          : typeof maybe.statusCode === "number"
-          ? String(maybe.statusCode)
-          : "";
-      if (message) parts.push(message);
-      if (details) parts.push(details);
-      if (hint) parts.push(`hint: ${hint}`);
-      if (code) parts.push(`code: ${code}`);
-      if (status) parts.push(`status: ${status}`);
-      if (parts.length > 0) return parts.join(" | ");
-    }
-    return "Cloud save failed.";
-  };
-  type CloudSourceState = "cloud" | "local-fallback" | "new-cloud" | "unknown";
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readStoredAppSettings());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const saved = window.localStorage.getItem("theme");
@@ -191,7 +163,6 @@ export default function App() {
   const [bookingDraft, setBookingDraft] = useState<TradePositionBooking[]>([]);
   /** Stabile Trade-ID für Autospeichern bei neuem Trade (ohne Bearbeitungsmodus). */
   const newTradeDraftIdRef = useRef<string | null>(null);
-  const cloudDataRevisionRef = useRef<number | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Alle" | Trade["status"]>("Alle");
   const [checkedFilter, setCheckedFilter] = useState<"Alle" | "Gecheckt" | "Offen">("Alle");
@@ -221,26 +192,6 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [journalData, setJournalData] = useState<JournalData>(() => loadJournalFromStorage());
   const [aiKnowledgeBase, setAiKnowledgeBase] = useState(() => loadAiKnowledgeFromStorage());
-  const [userId, setUserId] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [cloudReady, setCloudReady] = useState(false);
-  const [cloudHydrating, setCloudHydrating] = useState(false);
-  const [cloudPullBusy, setCloudPullBusy] = useState(false);
-  const [cloudSourceState, setCloudSourceState] = useState<CloudSourceState>("unknown");
-  const [lastCloudSaveAt, setLastCloudSaveAt] = useState<number | null>(null);
-  const [lastCloudSaveError, setLastCloudSaveError] = useState<string | null>(null);
-  const [cloudDataRevision, setCloudDataRevision] = useState<number | null>(null);
-  const [cloudDataRevisionAt, setCloudDataRevisionAt] = useState<string | null>(null);
-  const [cloudRemoteRevisionAhead, setCloudRemoteRevisionAhead] = useState(false);
-
-  useEffect(() => {
-    cloudDataRevisionRef.current = cloudDataRevision;
-  }, [cloudDataRevision]);
 
   const handleViewChange = (nextView: View) => {
     setView(nextView);
@@ -327,52 +278,6 @@ export default function App() {
       kaufGebuehren: `${appSettings.defaultBuyFees ?? 0}`,
       verkaufGebuehren: `${appSettings.defaultSellFees ?? 0}`
     });
-  const buildSnapshot = (): CloudSnapshot => ({
-    trades,
-    assetMeta,
-    journalData,
-    aiKnowledgeBase,
-    appSettings,
-    theme
-  });
-
-  /** Wendet einen von `loadCloudSnapshot` gelieferten Stand an (wie beim ersten Login). */
-  const applyRemoteSnapshotToAppState = useCallback((remote: CloudSnapshot) => {
-    const remoteTradeArr = Array.isArray(remote.trades) ? remote.trades : [];
-    const normalizedFromRemote = normalizeTradesOnLoad(remoteTradeArr).trades;
-    const localBackup = loadTradesFromStorage();
-    const usingLocalFallback = normalizedFromRemote.length === 0 && localBackup.length > 0;
-    const normalizedTrades = usingLocalFallback
-      ? normalizeTradesOnLoad(localBackup).trades
-      : normalizedFromRemote;
-    const legacyCheckedIds = new Set<string>(
-      Array.isArray(remote.appSettings?.manualCheckedTradeIds) ? remote.appSettings.manualCheckedTradeIds : []
-    );
-    const hydratedTrades = normalizedTrades.map((trade) => ({
-      ...trade,
-      manualChecked: !!trade.manualChecked || legacyCheckedIds.has(trade.id)
-    }));
-    if (normalizedFromRemote.length === 0 && localBackup.length > 0) {
-      console.warn(
-        "Cloud-Snapshot enthielt 0 Trades; lokale Browser-Kopie wird beibehalten. user_positions / user_position_transactions in Supabase prüfen oder JSON-Backup importieren."
-      );
-    }
-    setCloudSourceState(usingLocalFallback ? "local-fallback" : "cloud");
-    setTrades(hydratedTrades);
-    saveTradesToStorage(hydratedTrades);
-    setAssetMeta(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
-    saveAssetMetaToStorage(Array.isArray(remote.assetMeta) ? remote.assetMeta : []);
-    setJournalData(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
-    saveJournalToStorage(remote.journalData ?? { byDay: {}, byWeek: {}, byMonth: {} });
-    setAiKnowledgeBase(remote.aiKnowledgeBase ?? "");
-    saveAiKnowledgeToStorage(remote.aiKnowledgeBase ?? "");
-    if (remote.appSettings) setAppSettings({ ...defaultAppSettings, ...remote.appSettings });
-    if (remote.theme === "dark" || remote.theme === "light") setTheme(remote.theme);
-    setCloudDataRevision(remote.cloudDataRevision ?? 0);
-    setCloudDataRevisionAt(remote.cloudDataRevisionAt ?? null);
-    setCloudRemoteRevisionAhead(false);
-  }, []);
-
   const kpis = useMemo(() => getKpis(trades), [trades]);
   useEffect(() => {
     const timer = window.setInterval(() => setDashboardNow(new Date()), 1000);
@@ -398,20 +303,6 @@ export default function App() {
     document.documentElement.setAttribute("data-compact", appSettings.compactMode ? "true" : "false");
   }, [appSettings.compactMode]);
   useEffect(() => {
-    if (!supabase) {
-      setAuthLoading(false);
-      return;
-    }
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user.id ?? null);
-      setAuthLoading(false);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user.id ?? null);
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-  useEffect(() => {
     // Stelle sicher, dass eventuelle Migrationen auch in localStorage persistiert werden.
     const normalized = normalizeTradesOnLoad(trades);
     if (!normalized.changed) return;
@@ -419,203 +310,6 @@ export default function App() {
     saveTradesToStorage(normalized.trades);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    if (!userId) {
-      setCloudReady(false);
-      setCloudSourceState("unknown");
-      setLastCloudSaveAt(null);
-      setLastCloudSaveError(null);
-      setCloudDataRevision(null);
-      setCloudDataRevisionAt(null);
-      setCloudRemoteRevisionAhead(false);
-      return;
-    }
-    let cancelled = false;
-    const hydrate = async () => {
-      setCloudHydrating(true);
-      try {
-        const remote = await loadCloudSnapshot(userId);
-        if (cancelled) return;
-        if (remote) {
-          applyRemoteSnapshotToAppState(remote);
-        } else {
-          const rev = await saveCloudSnapshot(userId, buildSnapshot());
-          setCloudSourceState("new-cloud");
-          setLastCloudSaveAt(Date.now());
-          if (rev) {
-            setCloudDataRevision(rev.cloudDataRevision);
-            setCloudDataRevisionAt(rev.cloudDataRevisionAt);
-            setCloudRemoteRevisionAhead(false);
-          }
-        }
-        setCloudReady(true);
-      } catch (error) {
-        console.error("Cloud sync init failed:", error);
-        setLastCloudSaveError(error instanceof Error ? error.message : "Cloud sync init failed.");
-      } finally {
-        if (!cancelled) setCloudHydrating(false);
-      }
-    };
-    void hydrate();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, applyRemoteSnapshotToAppState]);
-  useEffect(() => {
-    if (!userId || !cloudReady || cloudHydrating) return;
-    const id = window.setTimeout(() => {
-      void saveCloudSnapshot(userId, buildSnapshot())
-        .then((rev) => {
-          setLastCloudSaveAt(Date.now());
-          setLastCloudSaveError(null);
-          if (rev) {
-            setCloudDataRevision(rev.cloudDataRevision);
-            setCloudDataRevisionAt(rev.cloudDataRevisionAt);
-            setCloudRemoteRevisionAhead(false);
-          }
-        })
-        .catch((error) => {
-          console.error("Cloud save failed:", error);
-          setLastCloudSaveError(formatCloudError(error));
-        });
-    }, 800);
-    return () => window.clearTimeout(id);
-  }, [userId, cloudReady, cloudHydrating, trades, assetMeta, journalData, aiKnowledgeBase, appSettings, theme]);
-
-  /** Wenn der Tab wieder sichtbar wird: prüfen, ob die Cloud-Revision höher ist (z. B. anderes Gerät hat gespeichert). */
-  useEffect(() => {
-    if (!userId || !cloudReady) return;
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
-      void (async () => {
-        const meta = await fetchCloudDataRevision(userId);
-        if (!meta) return;
-        const local = cloudDataRevisionRef.current ?? 0;
-        if (meta.cloudDataRevision > local) setCloudRemoteRevisionAhead(true);
-      })();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [userId, cloudReady]);
-
-  /**
-   * Liest den aktuellen Stand aus Supabase und ersetzt den lokalen App-Zustand (wie Seitenreload nach Login).
-   * Hochladen lokaler Änderungen erfolgt weiter automatisch nach Bearbeitung (debounced Save).
-   */
-  const triggerSyncFromCloud = async () => {
-    if (!userId || !cloudReady || cloudHydrating || cloudPullBusy) return;
-    setCloudPullBusy(true);
-    setCloudHydrating(true);
-    setLastCloudSaveError(null);
-    try {
-      const remote = await loadCloudSnapshot(userId);
-      if (!remote) {
-        window.alert(
-          appSettings.language === "en"
-            ? "No cloud data found for this account. Log in on a device where you already use the app, or import a backup."
-            : "Für dieses Konto wurden keine Cloud-Daten gefunden. Melde dich auf einem Gerät an, auf dem du die App schon nutzt, oder importiere ein Backup."
-        );
-        return;
-      }
-      applyRemoteSnapshotToAppState(remote);
-      setLastCloudSaveAt(Date.now());
-    } catch (error) {
-      console.error("Pull from cloud failed:", error);
-      const message = formatCloudError(error);
-      setLastCloudSaveError(message);
-      window.alert(
-        appSettings.language === "en"
-          ? `Loading from Supabase failed:\n\n${message}`
-          : `Laden von Supabase fehlgeschlagen:\n\n${message}`
-      );
-    } finally {
-      setCloudHydrating(false);
-      setCloudPullBusy(false);
-    }
-  };
-
-  const syncTimeLabel = useMemo(() => {
-    if (!lastCloudSaveAt) return appSettings.language === "en" ? "never" : "nie";
-    return new Date(lastCloudSaveAt).toLocaleTimeString(getLanguageLocale(appSettings.language), {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-  }, [lastCloudSaveAt, appSettings.language]);
-  const syncBadge = useMemo(() => {
-    const revSuffix =
-      cloudDataRevision == null
-        ? ""
-        : appSettings.language === "en"
-        ? ` Cloud rev. ${cloudDataRevision}.`
-        : ` Cloud-Rev. ${cloudDataRevision}.`;
-    if (cloudHydrating) {
-      return {
-        tone: "neutral" as const,
-        label: appSettings.language === "en" ? "Sync: loading..." : "Sync: lädt...",
-        detail: appSettings.language === "en" ? "Cloud snapshot is being loaded." : "Cloud-Snapshot wird geladen."
-      };
-    }
-    if (lastCloudSaveError) {
-      return {
-        tone: "error" as const,
-        label: appSettings.language === "en" ? "Sync: error" : "Sync: Fehler",
-        detail: lastCloudSaveError
-      };
-    }
-    if (cloudRemoteRevisionAhead) {
-      const tabRev =
-        cloudDataRevision != null
-          ? appSettings.language === "en"
-            ? `This tab is at rev. ${cloudDataRevision}. `
-            : `Dieser Tab: Rev. ${cloudDataRevision}. `
-          : "";
-      return {
-        tone: "warn" as const,
-        label: appSettings.language === "en" ? "Sync: cloud newer" : "Sync: Cloud neuer",
-        detail:
-          appSettings.language === "en"
-            ? `${tabRev}Supabase has a newer revision — tap „Sync“ to load. Last save: ${syncTimeLabel}.`
-            : `${tabRev}In Supabase liegt eine höhere Revision — „Synchronisieren“ antippen. Letzter Save: ${syncTimeLabel}.`
-      };
-    }
-    if (cloudSourceState === "local-fallback") {
-      return {
-        tone: "warn" as const,
-        label: appSettings.language === "en" ? "Sync: local fallback" : "Sync: lokaler Fallback",
-        detail:
-          appSettings.language === "en"
-            ? `Cloud looked empty; local browser data is used. Last save: ${syncTimeLabel}.${revSuffix}`
-            : `Cloud wirkte leer; lokale Browser-Daten aktiv. Letzter Save: ${syncTimeLabel}.${revSuffix}`
-      };
-    }
-    if (cloudSourceState === "new-cloud") {
-      return {
-        tone: "ok" as const,
-        label: appSettings.language === "en" ? "Sync: cloud initialized" : "Sync: Cloud initialisiert",
-        detail:
-          appSettings.language === "en"
-            ? `Cloud was initialized from current app data. Last save: ${syncTimeLabel}.${revSuffix}`
-            : `Cloud wurde aus den aktuellen App-Daten initialisiert. Letzter Save: ${syncTimeLabel}.${revSuffix}`
-      };
-    }
-    return {
-      tone: "ok" as const,
-      label: appSettings.language === "en" ? "Sync: cloud ok" : "Sync: Cloud OK",
-      detail:
-        appSettings.language === "en"
-          ? `Using cloud data. Last save: ${syncTimeLabel}.${revSuffix}`
-          : `Cloud-Daten aktiv. Letzter Save: ${syncTimeLabel}.${revSuffix}`
-    };
-  }, [
-    cloudHydrating,
-    lastCloudSaveError,
-    cloudSourceState,
-    cloudRemoteRevisionAhead,
-    cloudDataRevision,
-    appSettings.language,
-    syncTimeLabel
-  ]);
 
   const dashboardOpenPositions = useMemo(
     () =>
@@ -1661,7 +1355,7 @@ export default function App() {
   };
   const exportTradesDbImportReadyExcel = () => {
     const rows = trades.map((trade) => ({
-      user_id: userId ?? "",
+      user_id: "local",
       source_broker: trade.sourceBroker ?? "MANUAL",
       source_account: trade.sourceAccount ?? "",
       name: trade.name,
@@ -1718,7 +1412,7 @@ export default function App() {
     const rows = allBookingRows.map((row) => {
       const trade = trades.find((t) => t.id === row.tradeId);
       return {
-        user_id: userId ?? "",
+        user_id: "local",
         source_broker: trade?.sourceBroker ?? "MANUAL",
         source_account: trade?.sourceAccount ?? "",
         legacy_trade_id: row.tradeId,
@@ -1904,116 +1598,6 @@ export default function App() {
     setCalendarRangeEnd(null);
   };
 
-  const handleAuthSubmit = async () => {
-    if (!supabase) return;
-    setAuthBusy(true);
-    setAuthError(null);
-    const email = authEmail.trim();
-    const emailRedirectTo = window.location.origin;
-    try {
-      if (authMode === "register") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password: authPassword,
-          options: { emailRedirectTo }
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
-        if (error) throw error;
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Authentifizierung fehlgeschlagen.";
-      setAuthError(message);
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    setCloudReady(false);
-  };
-
-  if (!supabaseConfigured) {
-    return (
-      <div className="layout auth-layout">
-        <main className="content auth-page">
-          <section className="card auth-card auth-setup-card">
-            <h1>Supabase konfigurieren</h1>
-            <p>Bitte trage in deiner .env folgende Variablen ein und starte die App neu:</p>
-            <p><code>VITE_SUPABASE_URL</code> und <code>VITE_SUPABASE_ANON_KEY</code>.</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  if (authLoading || cloudHydrating) {
-    return (
-      <div className="layout auth-layout">
-        <main className="content auth-page">
-          <section className="card auth-card auth-loading-card">
-            <p>Lade Cloud-Daten ...</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  if (!userId) {
-    return (
-      <div className="layout auth-layout">
-        <main className="content auth-page">
-          <section className="card auth-card">
-            <div className="auth-head">
-              <h1>{authMode === "login" ? "Willkommen zurück" : "Konto erstellen"}</h1>
-              <p>Logge dich ein, damit deine Daten automatisch über alle Geräte synchron bleiben.</p>
-            </div>
-            <div className="auth-form-grid">
-              <label>
-                <span className="field-title">E-Mail</span>
-                <input
-                  type="email"
-                  placeholder="name@beispiel.de"
-                  value={authEmail}
-                  onChange={(event) => setAuthEmail(event.target.value)}
-                />
-              </label>
-              <label>
-                <span className="field-title">Passwort</span>
-                <input
-                  type="password"
-                  placeholder="Mindestens 6 Zeichen"
-                  value={authPassword}
-                  onChange={(event) => setAuthPassword(event.target.value)}
-                />
-              </label>
-              <div className="auth-actions">
-                <button
-                  className="primary"
-                  onClick={handleAuthSubmit}
-                  disabled={authBusy || !authEmail.trim() || !authPassword}
-                >
-                  {authBusy ? "Bitte warten ..." : authMode === "login" ? "Einloggen" : "Account erstellen"}
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => setAuthMode((prev) => (prev === "login" ? "register" : "login"))}
-                  disabled={authBusy}
-                >
-                  {authMode === "login" ? "Noch kein Konto? Registrieren" : "Schon ein Konto? Einloggen"}
-                </button>
-              </div>
-              {authError && <p className="auth-error">{authError}</p>}
-            </div>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="layout">
       <SidebarNav
@@ -2027,32 +1611,6 @@ export default function App() {
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
       />
       <main className="content">
-        <div className="auth-topbar">
-          <span className={`sync-health-badge ${syncBadge.tone}`} title={syncBadge.detail}>
-            {syncBadge.label}
-          </span>
-          <button
-            className="secondary slim"
-            type="button"
-            onClick={() => void triggerSyncFromCloud()}
-            disabled={!userId || !cloudReady || cloudHydrating || cloudPullBusy}
-            title={
-              appSettings.language === "en"
-                ? "Load the latest data from Supabase into this browser (same as after login). If the cloud has no trades but this browser does, the local copy is kept. Unsaved edits in this tab can be overwritten. Your own changes are still uploaded automatically after you edit (short delay)."
-                : "Aktuellen Datenstand aus Supabase in diesen Browser laden (wie nach dem Login). Wenn die Cloud 0 Trades hat, dieser Browser aber schon Daten hat, bleibt die lokale Kopie. Ungespeicherte Änderungen in diesem Tab können überschrieben werden. Nach Bearbeitungen speichert die App weiterhin automatisch in die Cloud (kurze Verzögerung)."
-            }
-          >
-            {cloudPullBusy
-              ? appSettings.language === "en"
-                ? "Syncing…"
-                : "Synchronisiere…"
-              : appSettings.language === "en"
-              ? "Sync"
-              : "Synchronisieren"}
-          </button>
-          <button className="secondary slim" onClick={handleLogout}>Logout</button>
-        </div>
-        {lastCloudSaveError ? <p className="sync-health-inline-error">{lastCloudSaveError}</p> : null}
         {view === "dashboard" && (
           <DashboardView
             kpis={kpis}
@@ -2153,7 +1711,6 @@ export default function App() {
             language={appSettings.language}
             existingTradesCount={trades.length}
             existingTrades={trades}
-            userId={userId}
             onCommitImportedTrades={(nextTrades) => {
               setTrades(nextTrades);
               saveTradesToStorage(nextTrades);

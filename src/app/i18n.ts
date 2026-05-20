@@ -65,11 +65,11 @@ const de: Dict = {
   tradesFullExportExcel: "Voll-Export Trades (Excel)",
   tradesFullExportExcelHint: "Alle Trade-Felder inkl. Quelle, Account, Event-ID und Buchungs-JSON",
   tradesDbExportExcel: "DB-Import-ready Trades (Excel)",
-  tradesDbExportExcelHint: "Spalten in Supabase-naher Struktur für `user_positions`",
+  tradesDbExportExcelHint: "Spalten in DB-Import-Struktur für `user_positions` (optional)",
   bookingsFullExportExcel: "Voll-Export Buchungen (Excel)",
   bookingsFullExportExcelHint: "Alle Buchungen inkl. Trade-Kontext und DB-nahen Feldern",
   bookingsDbExportExcel: "DB-Import-ready Buchungen (Excel)",
-  bookingsDbExportExcelHint: "Spalten in Supabase-naher Struktur für `user_position_transactions`",
+  bookingsDbExportExcelHint: "Spalten in DB-Import-Struktur für `user_position_transactions` (optional)",
   bookingsImportExcel: "Excel importieren",
   bookingsImportExcelHint: "Gleiche Spalten wie „Voll-Export Buchungen“ (z. B. buchungen-voll-export.xlsx)",
   bookingsImportExcelOnly: "Bitte eine Excel-Datei (.xlsx oder .xls) wählen.",
@@ -279,9 +279,9 @@ const de: Dict = {
   buyData: "Kaufdaten",
   sellData: "Verkaufsdaten",
   booking: "Buchung",
-  cloudBookingsTitle: "Buchungen (Cloud)",
+  cloudBookingsTitle: "Buchungen",
   cloudBookingsHint:
-    "Im Bearbeitungsmodus: Zeilen werden mit Supabase synchronisiert (Dual-Write). Kauf-/Verkaufs-Karten oben bleiben die Hauptfelder; zusätzliche Käufe/Verkäufe kannst du hier als eigene Buchungszeilen erfassen.",
+    "Im Bearbeitungsmodus: zusätzliche Käufe/Verkäufe als eigene Buchungszeilen. Kauf-/Verkaufs-Karten oben bleiben die Hauptfelder. Alles wird lokal im Browser gespeichert.",
   cloudBookingsAddBuy: "+ Kaufzeile",
   cloudBookingsAddSell: "+ Verkaufszeile",
   cloudBookingsAddTax: "+ Steuerzeile",
@@ -306,7 +306,7 @@ const de: Dict = {
   taxCorrectionSwitchTypeHint: "Wechsel zum vollen Formular mit Basiswert, ISIN usw.",
   taxCorrectionSavedHintTitle: "Speichern",
   taxCorrectionSavedHintBody:
-    "Die Steuerkorrektur erscheint in der Trade-Liste und wird bei aktivierter Cloud mit Supabase synchronisiert.",
+    "Die Steuerkorrektur erscheint in der Trade-Liste und wird lokal gespeichert.",
   dividendPageTitle: "Dividende",
   dividendPageSubtitle: "Ertrag zum Basiswert erfassen (Brutto, Steuer, Buchungsdatum).",
   interestPageTitle: "Zinszahlung",
@@ -327,9 +327,9 @@ const de: Dict = {
   incomeFormTaxHint:
     "Leer = automatische Schätzung (27,5 % Dividende / 20 % Zins). Positive Eingabe = abgeführt wie im restlichen Formular.",
   dividendFormSavedHintBody:
-    "Die Dividende erscheint in der Trade-Liste und wird bei Cloud-Sync als Position mit Ertrags-Buchung gespeichert.",
+    "Die Dividende erscheint in der Trade-Liste und wird als Position mit Ertrags-Buchung lokal gespeichert.",
   interestFormSavedHintBody:
-    "Die Zinszahlung erscheint in der Trade-Liste und wird bei Cloud-Sync als Position mit Ertrags-Buchung gespeichert.",
+    "Die Zinszahlung erscheint in der Trade-Liste und wird als Position mit Ertrags-Buchung lokal gespeichert.",
   result: "Ergebnis",
   differenceEur: "Steuergrundlage (EUR)",
   taxEur: "Steuer (EUR)",
@@ -528,7 +528,7 @@ const de: Dict = {
   journalDayPlaceholder: "Markdown für Tagesnotizen, Links, Checklisten …",
   journalMonthPlaceholder: "Monatsnotizen, Fokus-Themen, Review, wiederkehrende Regeln …",
   journalBlurHint:
-    "Speichert automatisch nach kurzer Pause; beim Tab-Wechsel oder Verlassen des Feldes sofort. So gelangt der Text zuverlässig in die Cloud.",
+    "Speichert automatisch nach kurzer Pause; beim Tab-Wechsel oder Verlassen des Feldes sofort. Alles bleibt lokal im Browser.",
   journalBelongsToWeek: "Dieses Datum liegt in KW {week} ({year}).",
   journalOpenWeek: "Im Tab „Kalenderwoche“ öffnen",
   journalMdEditPencilAria: "Notizen bearbeiten",
@@ -837,10 +837,10 @@ const de: Dict = {
   importResultExecutedAt: "Ausgeführt am: {datetime}",
   importResultSimulationNote: "Hinweis: Aktuell ist dies eine sichere Simulation ohne persistentes Schreiben.",
   importResultPersistedEvents: "Gespeicherte Events",
-  importResultLiveNote: "Ausführung ist aktiv: CSV-Events wurden idempotent in user_broker_events gespeichert; TR-Trades wurden lokal synchronisiert.",
+  importResultLiveNote: "CSV-Events wurden lokal gespeichert; TR-Trades wurden in deine Trade-Liste übernommen.",
   importResultSuccess:
     "Import erfolgreich abgeschlossen. Neu: {created}, aktualisiert: {updated}, übersprungen: {skipped}, Events gespeichert: {events}.",
-  importExecuteMissingAuth: "Import kann nur mit aktivem Login ausgeführt werden.",
+  importExecuteMissingAuth: "Import konnte nicht ausgeführt werden.",
   importExecuteFailed: "Import-Ausführung fehlgeschlagen.",
   importExecuteBlockedByReview: "Ausführung blockiert: {count} Zeile(n) stehen noch auf 'Manuell prüfen'. Bitte in Schritt 4 entscheiden."
 };
@@ -907,11 +907,11 @@ const en: Dict = {
   tradesFullExportExcel: "Full export trades (Excel)",
   tradesFullExportExcelHint: "All trade fields incl. source, account, event id, and bookings JSON",
   tradesDbExportExcel: "DB-import-ready trades (Excel)",
-  tradesDbExportExcelHint: "Columns in Supabase-like structure for `user_positions`",
+  tradesDbExportExcelHint: "Columns in DB import structure for `user_positions` (optional)",
   bookingsFullExportExcel: "Full export bookings (Excel)",
   bookingsFullExportExcelHint: "All bookings incl. trade context and DB-like fields",
   bookingsDbExportExcel: "DB-import-ready bookings (Excel)",
-  bookingsDbExportExcelHint: "Columns in Supabase-like structure for `user_position_transactions`",
+  bookingsDbExportExcelHint: "Columns in DB import structure for `user_position_transactions` (optional)",
   bookingsImportExcel: "Import Excel",
   bookingsImportExcelHint: "Same columns as “Full export bookings” (e.g. buchungen-voll-export.xlsx)",
   bookingsImportExcelOnly: "Please choose an Excel file (.xlsx or .xls).",
@@ -1122,9 +1122,9 @@ const en: Dict = {
   buyData: "Buy data",
   sellData: "Sell data",
   booking: "Booking",
-  cloudBookingsTitle: "Bookings (cloud)",
+  cloudBookingsTitle: "Bookings",
   cloudBookingsHint:
-    "While editing: rows sync to Supabase (dual-write). Buy/sell cards remain the primary fields; add further legs here as separate booking lines.",
+    "While editing: add further buy/sell legs as separate booking lines. Buy/sell cards remain the primary fields. Everything is stored locally in your browser.",
   cloudBookingsAddBuy: "+ Buy line",
   cloudBookingsAddSell: "+ Sell line",
   cloudBookingsAddTax: "+ Tax line",
@@ -1149,7 +1149,7 @@ const en: Dict = {
   taxCorrectionSwitchTypeHint: "Switch to the full form with underlying, ISIN, etc.",
   taxCorrectionSavedHintTitle: "Saving",
   taxCorrectionSavedHintBody:
-    "The entry appears in the trade list and syncs to Supabase when cloud sync is enabled.",
+    "The entry appears in the trade list and is saved locally.",
   dividendPageTitle: "Dividend",
   dividendPageSubtitle: "Record income linked to an underlying (gross, tax, booking date).",
   interestPageTitle: "Interest payment",
@@ -1170,9 +1170,9 @@ const en: Dict = {
   incomeFormTaxHint:
     "Empty = automatic estimate (27.5% dividend / 20% interest). Positive input = withheld tax, same convention as elsewhere.",
   dividendFormSavedHintBody:
-    "The dividend appears in the trade list and syncs to the cloud as a position with an income booking.",
+    "The dividend appears in the trade list and is saved locally as a position with an income booking.",
   interestFormSavedHintBody:
-    "The interest entry appears in the trade list and syncs to the cloud as a position with an income booking.",
+    "The interest entry appears in the trade list and is saved locally as a position with an income booking.",
   result: "Result",
   differenceEur: "Tax base (EUR)",
   taxEur: "Tax (EUR)",
@@ -1371,7 +1371,7 @@ const en: Dict = {
   journalDayPlaceholder: "Markdown for daily notes, links, checklists…",
   journalMonthPlaceholder: "Monthly notes, focus topics, review, recurring rules…",
   journalBlurHint:
-    "Saves automatically after a short pause; also when you leave the field or switch tabs, so text reliably reaches the cloud.",
+    "Saves automatically after a short pause; also when you leave the field or switch tabs. Everything stays in your browser.",
   journalBelongsToWeek: "This date is in week {week} ({year}).",
   journalOpenWeek: "Open in the “Week” tab",
   journalMdEditPencilAria: "Edit notes",
@@ -1679,10 +1679,10 @@ const en: Dict = {
   importResultExecutedAt: "Executed at: {datetime}",
   importResultSimulationNote: "Note: this is currently a safe simulation without persistent writes.",
   importResultPersistedEvents: "Persisted events",
-  importResultLiveNote: "Execution is live: CSV events were stored idempotently in user_broker_events; TR trades were synchronized locally.",
+  importResultLiveNote: "CSV events were stored locally; TR trades were merged into your trade list.",
   importResultSuccess:
     "Import completed successfully. Created: {created}, updated: {updated}, skipped: {skipped}, events persisted: {events}.",
-  importExecuteMissingAuth: "Import requires an active login.",
+  importExecuteMissingAuth: "Import could not be executed.",
   importExecuteFailed: "Import execution failed.",
   importExecuteBlockedByReview: "Execution blocked: {count} row(s) are still marked 'Manual review'. Please decide in step 4."
 };

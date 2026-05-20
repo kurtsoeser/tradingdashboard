@@ -166,6 +166,7 @@ export function TradesView(props: TradesViewProps) {
     | "typ"
     | "basiswert"
     | "kaufStueck"
+    | "kaufStueckpreis"
     | "verkaufStueck"
     | "extern"
     | "isin"
@@ -186,6 +187,7 @@ export function TradesView(props: TradesViewProps) {
     typ: true,
     basiswert: true,
     kaufStueck: true,
+    kaufStueckpreis: true,
     verkaufStueck: true,
     extern: true,
     isin: true,
@@ -207,6 +209,7 @@ export function TradesView(props: TradesViewProps) {
     "typ",
     "basiswert",
     "kaufStueck",
+    "kaufStueckpreis",
     "verkaufStueck",
     "extern",
     "isin",
@@ -256,6 +259,16 @@ export function TradesView(props: TradesViewProps) {
     if (!source) return "MANUAL";
     if (source === "TRADE_REPUBLIC") return "Trade Republic";
     return source;
+  };
+  const getBuyUnitPrice = (trade: Trade): number | null => {
+    if (trade.kaufStueckpreis !== undefined && Number.isFinite(trade.kaufStueckpreis) && trade.kaufStueckpreis > 0) {
+      return trade.kaufStueckpreis;
+    }
+    const qty = getTradeBoughtQty(trade);
+    if (qty > 0 && trade.kaufPreis > 0) {
+      return trade.kaufPreis / qty;
+    }
+    return null;
   };
 
   const columnDefs = (() => {
@@ -332,6 +345,15 @@ export function TradesView(props: TradesViewProps) {
         render: (trade: Trade) => {
           const q = getTradeBoughtQty(trade);
           return q > 0 ? q : trade.stueck !== undefined ? trade.stueck : "-";
+        }
+      },
+      kaufStueckpreis: {
+        id: "kaufStueckpreis" satisfies ColumnId,
+        label: "K €/Stk",
+        draggable: true,
+        render: (trade: Trade) => {
+          const unitPrice = getBuyUnitPrice(trade);
+          return unitPrice !== null ? money(unitPrice) : "-";
         }
       },
       verkaufStueck: {
@@ -437,6 +459,10 @@ export function TradesView(props: TradesViewProps) {
       case "kaufStueck": {
         const b = getTradeBoughtQty(trade);
         return b > 0 ? `${b}` : trade.stueck !== undefined ? `${trade.stueck}` : "-";
+      }
+      case "kaufStueckpreis": {
+        const unitPrice = getBuyUnitPrice(trade);
+        return unitPrice !== null ? money(unitPrice) : "-";
       }
       case "verkaufStueck": {
         const s = getTradeSoldQty(trade);
@@ -1031,11 +1057,13 @@ export function TradesView(props: TradesViewProps) {
                   <th
                     key={id}
                     className={`${sortableField ? "sortable" : ""} ${id === "extern" ? "trader-col" : ""} ${
-                      id === "kaufStueck" || id === "verkaufStueck" ? "piece-col" : ""
+                      id === "kaufStueck" || id === "kaufStueckpreis" || id === "verkaufStueck" ? "piece-col" : ""
                     }`.trim()}
                     title={
                       id === "kaufStueck"
                         ? `${t(props.language, "buy")} ${t(props.language, "shares")}`
+                        : id === "kaufStueckpreis"
+                        ? `${t(props.language, "buy")} €/ ${t(props.language, "shares")}`
                         : id === "verkaufStueck"
                         ? `${t(props.language, "sell")} ${t(props.language, "shares")}`
                         : undefined
@@ -1077,7 +1105,7 @@ export function TradesView(props: TradesViewProps) {
             {props.filteredTrades.slice(0, 500).map((trade) => (
               <tr key={trade.id} className="trades-row-open-edit" onClick={() => props.onEditTrade(trade)} title={t(props.language, "edit")}>
                 {renderedColumns.map((id) => (
-                  <td key={id} className={`${id === "extern" ? "trader-col" : ""} ${id === "kaufStueck" || id === "verkaufStueck" ? "piece-col" : ""}`.trim()}>
+                  <td key={id} className={`${id === "extern" ? "trader-col" : ""} ${id === "kaufStueck" || id === "kaufStueckpreis" || id === "verkaufStueck" ? "piece-col" : ""}`.trim()}>
                     {columnDefs[id].render(trade)}
                   </td>
                 ))}

@@ -59,6 +59,6 @@ export interface Trade {
   verkaufPreisManuell?: number;
   gewinn?: number;
   status: TradeStatus;
-  /** Optional: aus Supabase geladen (`user_position_transactions`). */
+  /** Optional: detaillierte Buchungszeilen (Import/Editor). */
   bookings?: TradePositionBooking[];
 }
